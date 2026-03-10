@@ -1,0 +1,39 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'  # or your Python version
+
+      - name: Install Dependencies
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\Activate.ps1
+          pip install --upgrade pip
+          pip install -r requirements.txt
+        shell: pwsh
+
+      - name: Build EXE
+        run: |
+          .\.venv\Scripts\Activate.ps1
+          python src/build_exe.py
+        shell: pwsh
+
+      - name: Upload EXE Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: codex-exe
+          path: dist\soccer_simulator.exe
