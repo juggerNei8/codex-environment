@@ -10,30 +10,35 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'  # or your Python version
+          python-version: "3.11"
 
-      - name: Install Dependencies
+      - name: Create virtual environment
+        shell: pwsh
         run: |
           python -m venv .venv
-          .\.venv\Scripts\Activate.ps1
-          python install --upgrade pip
-          python install -r requirements.txt
-        shell: pwsh
 
-      - name: Build EXE
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          .\.venv\Scripts\Activate.ps1
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+
+      - name: Build executable
+        shell: pwsh
         run: |
           .\.venv\Scripts\Activate.ps1
           python src/build_exe.py
-        shell: pwsh
 
-      - name: Upload EXE Artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: codex-exe
-          path: dist\soccer_simulator.exe
+          name: soccer-simulator-exe
+          path: dist/soccer_simulator.exe
