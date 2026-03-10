@@ -22,8 +22,8 @@ jobs:
         run: |
           python -m venv .venv
           .\.venv\Scripts\Activate.ps1
-          pip install --upgrade pip
-          pip install -r requirements.txt
+          python install --upgrade pip
+          python install -r requirements.txt
         shell: pwsh
 
       - name: Build EXE
