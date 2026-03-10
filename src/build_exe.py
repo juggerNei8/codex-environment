@@ -1,13 +1,8 @@
-import subprocess
+import PyInstaller.__main__
 
-print("Building executable...")
-
-subprocess.run([
-    "pyinstaller",
+PyInstaller.__main__.run([
+    "src/app.py",
     "--onefile",
-    "--name",
-    "soccer_simulator",
-    "src/app.py"
+    "--windowed",
+    "--name=soccer_simulator"
 ])
-
-print("Build complete. Check the dist folder.")
