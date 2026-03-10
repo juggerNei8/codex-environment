@@ -10,7 +10,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -18,12 +18,12 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Create virtual environment
+      - name: Create Virtual Environment
         shell: pwsh
         run: |
           python -m venv .venv
 
-      - name: Install dependencies
+      - name: Install Dependencies
         shell: pwsh
         run: |
           .\.venv\Scripts\Activate.ps1
@@ -31,13 +31,13 @@ jobs:
           pip install pyinstaller
           if (Test-Path requirements.txt) { pip install -r requirements.txt }
 
-      - name: Build executable
+      - name: Build EXE
         shell: pwsh
         run: |
           .\.venv\Scripts\Activate.ps1
           python src/build_exe.py
 
-      - name: Upload artifact
+      - name: Upload EXE Artifact
         uses: actions/upload-artifact@v4
         with:
           name: soccer-simulator-exe
