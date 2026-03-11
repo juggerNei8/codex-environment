@@ -9,3 +9,13 @@ PyInstaller.__main__.run([
     '--add-data=../assets;assets',
     'app.py'
 ])
+import PyInstaller.__main__
+
+PyInstaller.__main__.run([
+'--name=FootballSimulator',
+'--onefile',
+'--windowed',
+'--add-data=../database;database',
+'--add-data=../assets;assets',
+'app.py'
+])
