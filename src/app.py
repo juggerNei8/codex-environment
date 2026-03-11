@@ -27,14 +27,14 @@ result_label.pack(pady=10)
 
 app.mainloop()
 import tkinter as tk
-from match_engine import simulate_match
+from match_engine import run_match
 
 def play_match():
 
     team1 = team1_entry.get()
     team2 = team2_entry.get()
 
-    result = simulate_match(team1, team2)
+    result = run_match(team1, team2)
 
     output.delete("1.0", tk.END)
 
