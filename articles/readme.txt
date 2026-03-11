@@ -1,0 +1,1 @@
+echo admin articles go here > articles\readme.txt
