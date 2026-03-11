@@ -1,17 +1,22 @@
+# src/prediction_model.py
 import pandas as pd
-import random
+from utils import resource_path
 
-teams = pd.read_csv("database/teams.csv")
+teams_csv = resource_path("database/teams.csv")
+players_csv = resource_path("database/players.csv")
+
+try:
+    teams = pd.read_csv(teams_csv)
+    players = pd.read_csv(players_csv)
+except FileNotFoundError as e:
+    raise FileNotFoundError(f"CSV not found: {e}")
 
 def predict_match(team1, team2):
-
-    t1 = teams[teams["team"] == team1].iloc[0]
-    t2 = teams[teams["team"] == team2].iloc[0]
-
-    score1 = int((t1.attack + random.randint(0,10)) / 20)
-    score2 = int((t2.attack + random.randint(0,10)) / 20)
-
-    win_prob1 = round(random.uniform(40,60),2)
-    win_prob2 = 100 - win_prob1
-
-    return score1, score2, win_prob1, win_prob2
+    t1_score = teams.loc[teams['team'] == team1, 'strength'].values[0]
+    t2_score = teams.loc[teams['team'] == team2, 'strength'].values[0]
+    if t1_score > t2_score:
+        return f"{team1} wins!"
+    elif t2_score > t1_score:
+        return f"{team2} wins!"
+    else:
+        return "Draw!"

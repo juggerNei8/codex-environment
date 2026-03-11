@@ -1,15 +1,4 @@
-import tkinter as tk
-import random
+from utils import resource_path
 
-def animate(canvas):
-
-    ball = canvas.create_oval(380,230,400,250,fill="white")
-
-    for i in range(50):
-
-        dx = random.randint(-10,10)
-        dy = random.randint(-10,10)
-
-        canvas.move(ball,dx,dy)
-        canvas.update()
-        canvas.after(100)
+def play_match_animation():
+    print(f"Playing match animation with assets from {resource_path('assets')}")

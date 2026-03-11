@@ -1,15 +1,12 @@
 import os
+from utils import resource_path
 
-def ingest_article(file_path):
+articles_path = resource_path("articles")
 
-    os.makedirs("articles",exist_ok=True)
+def list_articles():
+    return [f for f in os.listdir(articles_path) if f.endswith(".txt")]
 
-    name=os.path.basename(file_path)
-
-    with open(file_path,"r",encoding="utf8") as f:
-        content=f.read()
-
-    with open(f"articles/{name}","w",encoding="utf8") as out:
-        out.write(content)
-
-    return "Article added to knowledge base"
+def add_article(filename: str, content: str):
+    file_path = os.path.join(articles_path, filename)
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(content)

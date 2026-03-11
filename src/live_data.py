@@ -1,15 +1,10 @@
 import requests
 
-def get_live_scores():
-
-    try:
-        url="https://api.football-data.org/v4/matches"
-        r=requests.get(url)
-
-        if r.status_code==200:
-            return "Live data retrieved"
-        else:
-            return "Live API unavailable"
-
-    except:
-        return "Internet connection failed"
+def get_live_score(team1, team2):
+    """
+    Placeholder for live API scores. Replace with a real API key.
+    """
+    # Example API URL
+    # response = requests.get(f"https://api.sportsdata.io/soccer?team1={team1}&team2={team2}&key=YOUR_KEY")
+    # return response.json()
+    return {"team1": team1, "team2": team2, "score": "2-1"}
