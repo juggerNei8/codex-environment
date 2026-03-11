@@ -2,3 +2,5 @@ dist/soccer_simulator.exe filter=lfs diff=lfs merge=lfs -text
 dist/*.exe filter=lfs diff=lfs merge=lfs -text
 database/*.csv filter=lfs diff=lfs merge=lfs -text
 assets/* filter=lfs diff=lfs merge=lfs -text
+*.csv filter=lfs diff=lfs merge=lfs -text
+*.exe filter=lfs diff=lfs merge=lfs -text
