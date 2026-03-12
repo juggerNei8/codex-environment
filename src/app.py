@@ -1,172 +1,356 @@
 import tkinter as tk
-from tkinter import messagebox
-from match_engine import run_match
+from tkinter import ttk
+import pandas as pd
+import os
+
 from animation_engine import AnimationEngine
+from match_engine import MatchEngine
+from ball_physics import BallPhysics
+from goalkeeper_ai import GoalKeeperAI
+from audio_engine import AudioEngine
+from logo_loader import LogoLoader
 
-WINDOW_WIDTH = 1200
-WINDOW_HEIGHT = 800
 
-
-class SoccerSimulator:
+class FootballSimulator:
 
     def __init__(self, root):
 
         self.root = root
         self.root.title("Football Match Simulator")
+        self.root.geometry("1400x720")
+        self.root.configure(bg="#0f172a")
 
-        self.root.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
-        self.root.configure(bg="#121212")
+        # match state
+        self.score_red = 0
+        self.score_blue = 0
+        self.match_time = 0
 
-        self.root.protocol("WM_DELETE_WINDOW", self.confirm_exit)
+        # engines
+        self.match_engine = MatchEngine()
+        self.ball_physics = BallPhysics()
+        self.gk_left = GoalKeeperAI("left")
+        self.gk_right = GoalKeeperAI("right")
+        self.audio = AudioEngine()
+        self.logo_loader = LogoLoader()
 
-        self.minute = 0
-        self.running_clock = False
+        # database
+        self.load_database()
 
+        # UI
         self.build_ui()
 
-    # -------------------------
+        # animation
+        self.engine = AnimationEngine(
+            self.canvas,
+            commentary_callback=self.add_commentary,
+            goal_callback=self.goal_scored,
+            possession_callback=self.update_possession
+        )
+
+        self.update_clock()
+
+    # ------------------------------------------------
+    # DATABASE
+    # ------------------------------------------------
+
+    def load_database(self):
+
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        teams_path = os.path.join(base_dir, "..", "database", "teams.csv")
+
+        try:
+
+            df = pd.read_csv(teams_path)
+
+            if "team" in df.columns:
+                self.team_list = sorted(df["team"].unique().tolist())
+            else:
+                self.team_list = sorted(df.iloc[:, 0].tolist())
+
+            print("Teams loaded:", len(self.team_list))
+
+        except:
+
+            print("Database missing. Using fallback teams.")
+
+            self.team_list = [
+                "Team1","Team2","Team3","Team4","Team5","Team6"
+            ]
+
+    # ------------------------------------------------
     # UI
-    # -------------------------
+    # ------------------------------------------------
 
     def build_ui(self):
 
-        title = tk.Label(
-            self.root,
-            text="Football Match Simulator",
-            font=("Segoe UI",26,"bold"),
-            bg="#121212",
+        header = tk.Frame(self.root, bg="#1e293b", height=80)
+        header.pack(fill="x")
+
+        self.score_label = tk.Label(
+            header,
+            text="0 - 0",
+            font=("Arial",32,"bold"),
+            bg="#1e293b",
             fg="white"
         )
-        title.pack(pady=15)
+        self.score_label.pack(side="left", padx=30)
 
-        self.build_controls()
-        self.build_pitch()
-        self.build_scoreboard()
-        self.build_clock()
+        self.clock_label = tk.Label(
+            header,
+            text="00:00",
+            font=("Arial",20),
+            bg="#1e293b",
+            fg="white"
+        )
+        self.clock_label.pack(side="right", padx=20)
 
-    # -------------------------
-    # TEAM INPUT
-    # -------------------------
+        self.possession_label = tk.Label(
+            header,
+            text="Possession 50% - 50%",
+            font=("Arial",12),
+            bg="#1e293b",
+            fg="white"
+        )
+        self.possession_label.pack(side="right", padx=20)
 
-    def build_controls(self):
+        main = tk.Frame(self.root, bg="#0f172a")
+        main.pack(fill="both", expand=True)
 
-        frame = tk.Frame(self.root,bg="#121212")
-        frame.pack()
+        sidebar = tk.Frame(main, width=220, bg="#0b2545")
+        sidebar.pack(side="left", fill="y")
 
-        tk.Label(frame,text="Home Team",fg="white",bg="#121212").grid(row=0,column=0)
-        tk.Label(frame,text="Away Team",fg="white",bg="#121212").grid(row=1,column=0)
+        pitch_frame = tk.Frame(main, bg="#0f172a")
+        pitch_frame.pack(side="left", expand=True)
 
-        self.team1_entry = tk.Entry(frame,width=20)
-        self.team2_entry = tk.Entry(frame,width=20)
+        right_panel = tk.Frame(main, width=260, bg="#0b2545")
+        right_panel.pack(side="right", fill="y")
 
-        self.team1_entry.grid(row=0,column=1)
-        self.team2_entry.grid(row=1,column=1)
+        # -------------------
+        # TEAM SELECTION
+        # -------------------
+
+        tk.Label(sidebar,text="HOME TEAM",bg="#0b2545",fg="white").pack(pady=10)
+
+        self.home_box = ttk.Combobox(
+            sidebar,
+            values=self.team_list,
+            height=20
+        )
+        self.home_box.pack()
+
+        tk.Label(sidebar,text="AWAY TEAM",bg="#0b2545",fg="white").pack(pady=10)
+
+        self.away_box = ttk.Combobox(
+            sidebar,
+            values=self.team_list,
+            height=20
+        )
+        self.away_box.pack()
+
+        if len(self.team_list) >= 2:
+            self.home_box.current(0)
+            self.away_box.current(1)
+
+        # -------------------
+        # BUTTONS
+        # -------------------
 
         tk.Button(
-            frame,
-            text="Simulate Match",
-            command=self.simulate_match,
-            bg="#1e88e5",
-            fg="white"
-        ).grid(row=2,column=0,columnspan=2,pady=10)
+            sidebar,
+            text="Start Match",
+            command=self.start_match,
+            width=20
+        ).pack(pady=15)
 
-    # -------------------------
-    # PITCH
-    # -------------------------
+        tk.Button(
+            sidebar,
+            text="Pause",
+            command=self.pause_match,
+            width=20
+        ).pack(pady=5)
 
-    def build_pitch(self):
+        tk.Button(
+            sidebar,
+            text="Reset",
+            command=self.reset_match,
+            width=20
+        ).pack(pady=5)
 
-        self.pitch = tk.Canvas(
-            self.root,
+        # -------------------
+        # PITCH
+        # -------------------
+
+        self.canvas = tk.Canvas(
+            pitch_frame,
             width=900,
             height=500,
-            bg="green",
+            bg="#2e7d32",
             highlightthickness=0
         )
 
-        self.pitch.pack(pady=10)
+        self.canvas.pack(expand=True,pady=30)
 
-        self.engine = AnimationEngine(self.pitch)
-        self.engine.animate()
+        # -------------------
+        # LEAGUE TABLE
+        # -------------------
 
-    # -------------------------
-    # SCOREBOARD
-    # -------------------------
-
-    def build_scoreboard(self):
-
-        self.score_label = tk.Label(
-            self.root,
-            text="0 - 0",
-            font=("Segoe UI",36,"bold"),
-            fg="#00e676",
-            bg="#121212"
-        )
-
-        self.score_label.pack()
-
-    # -------------------------
-    # MATCH CLOCK
-    # -------------------------
-
-    def build_clock(self):
-
-        self.clock = tk.Label(
-            self.root,
-            text="0'",
-            font=("Segoe UI",18),
+        tk.Label(
+            right_panel,
+            text="League Table",
+            bg="#0b2545",
             fg="white",
-            bg="#121212"
+            font=("Arial",12,"bold")
+        ).pack(pady=10)
+
+        self.table_box = tk.Text(
+            right_panel,
+            height=15,
+            width=30,
+            bg="#091c34",
+            fg="white"
+        )
+        self.table_box.pack()
+
+        # -------------------
+        # NEWS
+        # -------------------
+
+        tk.Label(
+            right_panel,
+            text="Club News",
+            bg="#0b2545",
+            fg="white",
+            font=("Arial",12,"bold")
+        ).pack(pady=10)
+
+        self.news_box = tk.Text(
+            right_panel,
+            height=10,
+            width=30,
+            bg="#091c34",
+            fg="white"
+        )
+        self.news_box.pack()
+
+        # -------------------
+        # COMMENTARY
+        # -------------------
+
+        self.commentary_box = tk.Text(
+            self.root,
+            height=6,
+            bg="#020617",
+            fg="white"
         )
 
-        self.clock.pack()
+        self.commentary_box.pack(fill="x")
+
+    # ------------------------------------------------
+    # MATCH CONTROL
+    # ------------------------------------------------
+
+    def start_match(self):
+
+        if not self.engine.running:
+
+            self.engine.running = True
+            self.engine.animate()
+
+            self.audio.play_crowd()
+
+            home = self.home_box.get()
+            away = self.away_box.get()
+
+            self.add_commentary(f"{home} vs {away} kickoff!")
+
+    def pause_match(self):
+
+        self.engine.running = False
+        self.add_commentary("Match paused.")
+
+    def reset_match(self):
+
+        self.engine.running = False
+        self.engine.reset_positions()
+
+        self.score_red = 0
+        self.score_blue = 0
+        self.match_time = 0
+
+        self.clock_label.config(text="00:00")
+
+        self.update_score()
+
+        self.add_commentary("Match reset.")
+
+    # ------------------------------------------------
+    # EVENTS
+    # ------------------------------------------------
+
+    def goal_scored(self, team):
+
+        if team == "red":
+            self.score_red += 1
+        else:
+            self.score_blue += 1
+
+        self.audio.play_goal()
+
+        self.update_score()
+
+        self.add_commentary(f"GOAL for {team.upper()}!")
+
+    # ------------------------------------------------
+    # UI
+    # ------------------------------------------------
+
+    def update_score(self):
+
+        self.score_label.config(
+            text=f"{self.score_red} - {self.score_blue}"
+        )
+
+    def update_possession(self, red, blue):
+
+        self.possession_label.config(
+            text=f"Possession {red}% - {blue}%"
+        )
+
+    def add_commentary(self, text):
+
+        self.commentary_box.insert("end", text + "\n")
+
+        lines = int(self.commentary_box.index('end-1c').split('.')[0])
+
+        if lines > 120:
+            self.commentary_box.delete("1.0","2.0")
+
+        self.commentary_box.see("end")
+
+    # ------------------------------------------------
+    # CLOCK
+    # ------------------------------------------------
 
     def update_clock(self):
 
-        if not self.running_clock:
-            return
+        if self.engine.running:
 
-        self.minute += 1
-        self.clock.config(text=f"{self.minute}'")
+            self.match_time += 1
 
-        if self.minute < 90:
-            self.root.after(1000,self.update_clock)
+            minutes = self.match_time // 60
+            seconds = self.match_time % 60
 
-    # -------------------------
-    # MATCH
-    # -------------------------
+            self.clock_label.config(
+                text=f"{minutes:02}:{seconds:02}"
+            )
 
-    def simulate_match(self):
-
-        team1 = self.team1_entry.get().strip()
-        team2 = self.team2_entry.get().strip()
-
-        if not team1 or not team2:
-            messagebox.showwarning("Input Error","Enter both teams")
-            return
-
-        result = run_match(team1,team2)
-
-        s1,s2 = result["score"]
-
-        self.score_label.config(text=f"{s1} - {s2}")
-
-        self.minute = 0
-        self.running_clock = True
-        self.update_clock()
-
-    # -------------------------
-    # EXIT
-    # -------------------------
-
-    def confirm_exit(self):
-
-        if messagebox.askyesno("Exit","Exit simulator?"):
-            self.root.destroy()
+        self.root.after(1000,self.update_clock)
 
 
-root = tk.Tk()
+# ------------------------------------------------
 
-app = SoccerSimulator(root)
+if __name__ == "__main__":
 
-root.mainloop()
+    root = tk.Tk()
+    app = FootballSimulator(root)
+    root.mainloop()
