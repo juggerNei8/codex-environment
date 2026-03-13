@@ -13,15 +13,13 @@ class LiveDataHub:
     def __init__(self):
         self.football_api_key = os.getenv("FOOTBALL_DATA_API_KEY", "").strip()
         self.news_api_key = os.getenv("NEWSAPI_KEY", "").strip()
-
-        # your richer second source / custom backend
-        self.secondary_player_api = os.getenv("SECONDARY_PLAYER_API_URL", "").strip()
-        self.secondary_player_api_key = os.getenv("SECONDARY_PLAYER_API_KEY", "").strip()
+        self.thesportsdb_api_key = os.getenv("THESPORTSDB_API_KEY", "123")  # demo / free-style default
 
     # ------------------------------------------------
 
-    def refresh_all(self, database_dir, competition_code="PL"):
+    def refresh_all(self, database_dir, assets_dir, competition_code="PL"):
         os.makedirs(database_dir, exist_ok=True)
+        os.makedirs(os.path.join(assets_dir, "logos"), exist_ok=True)
 
         result = {"updated": False, "notes": []}
 
@@ -44,9 +42,14 @@ class LiveDataHub:
 
         try:
             self.ensure_players_exists(database_dir)
-            self.refresh_players_from_secondary(database_dir)
         except Exception as e:
-            result["notes"].append(f"secondary players skipped: {e}")
+            result["notes"].append(f"players seed failed: {e}")
+
+        try:
+            self.refresh_logos(database_dir, assets_dir)
+            result["notes"].append("logos refreshed")
+        except Exception as e:
+            result["notes"].append(f"logos refresh failed: {e}")
 
         return result
 
@@ -54,12 +57,6 @@ class LiveDataHub:
 
     def football_headers(self):
         return {"X-Auth-Token": self.football_api_key}
-
-    def secondary_headers(self):
-        headers = {}
-        if self.secondary_player_api_key:
-            headers["Authorization"] = f"Bearer {self.secondary_player_api_key}"
-        return headers
 
     # ------------------------------------------------
 
@@ -78,7 +75,8 @@ class LiveDataHub:
                 "strength": 80,
                 "stadium": team.get("venue", ""),
                 "founded": team.get("founded", ""),
-                "shortName": team.get("shortName", "")
+                "shortName": team.get("shortName", ""),
+                "website": team.get("website", "")
             })
 
         self.write_csv(os.path.join(database_dir, "teams.csv"), rows)
@@ -145,7 +143,6 @@ class LiveDataHub:
 
         import pandas as pd
         teams_df = pd.read_csv(teams_path)
-
         if "team" not in teams_df.columns:
             return
 
@@ -177,42 +174,58 @@ class LiveDataHub:
         self.write_csv(path, rows)
 
     # ------------------------------------------------
-    # YOUR SECONDARY PLAYER / CLUB API
+    # THESPORTSDB LOGOS
     # ------------------------------------------------
 
-    def refresh_players_from_secondary(self, database_dir):
-        if not self.secondary_player_api or not REQUESTS_AVAILABLE:
+    def refresh_logos(self, database_dir, assets_dir):
+        teams_path = os.path.join(database_dir, "teams.csv")
+        if not os.path.exists(teams_path):
             return
 
-        r = requests.get(self.secondary_player_api, headers=self.secondary_headers(), timeout=25)
-        r.raise_for_status()
-        data = r.json()
+        import pandas as pd
+        teams_df = pd.read_csv(teams_path)
+        if "team" not in teams_df.columns:
+            return
 
-        players = data.get("players", [])
-        if players:
-            rows = []
-            for p in players:
-                rows.append({
-                    "player": p.get("name", ""),
-                    "team": p.get("team", ""),
-                    "position": p.get("position", ""),
-                    "rating": p.get("rating", 75),
-                    "number": p.get("number", ""),
-                    "nationality": p.get("nationality", ""),
-                    "value": p.get("value", 10),
-                    "clause": p.get("clause", ""),
-                    "agent": p.get("agent", ""),
-                    "stats": p.get("stats", ""),
-                    "proficiency": p.get("proficiency", ""),
-                    "association": p.get("association", ""),
-                    "attachment": p.get("attachment", ""),
-                    "objectives": p.get("objectives", ""),
-                    "injury_risk": p.get("injury_risk", 0.08),
-                    "form": p.get("form", 0.60),
-                })
-            self.write_csv(os.path.join(database_dir, "players.csv"), rows)
+        logos_dir = os.path.join(assets_dir, "logos")
+        os.makedirs(logos_dir, exist_ok=True)
+
+        for team_name in teams_df["team"].dropna().astype(str).tolist()[:40]:
+            filename = self.safe_name(team_name) + ".png"
+            target = os.path.join(logos_dir, filename)
+
+            if os.path.exists(target) and os.path.getsize(target) > 0:
+                continue
+
+            url = f"https://www.thesportsdb.com/api/v1/json/{self.thesportsdb_api_key}/searchteams.php"
+            r = requests.get(url, params={"t": team_name}, timeout=20)
+            r.raise_for_status()
+            data = r.json()
+
+            teams = data.get("teams")
+            if not teams:
+                continue
+
+            badge_url = teams[0].get("strBadge")
+            if not badge_url:
+                continue
+
+            img = requests.get(badge_url, timeout=20)
+            img.raise_for_status()
+
+            with open(target, "wb") as f:
+                f.write(img.content)
 
     # ------------------------------------------------
+
+    def safe_name(self, name):
+        return (
+            name.lower()
+            .replace(" ", "_")
+            .replace("/", "_")
+            .replace("\\", "_")
+            .replace("-", "_")
+        )
 
     def write_csv(self, path, rows):
         if not rows:

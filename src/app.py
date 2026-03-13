@@ -69,8 +69,6 @@ class FootballSimulator:
         base_dir = os.path.dirname(os.path.abspath(__file__))
         return os.path.normpath(os.path.join(base_dir, "..", *parts))
 
-    # ------------------------------------------------
-
     def ensure_database_files(self):
         db_dir = self.project_path("database")
         os.makedirs(db_dir, exist_ok=True)
@@ -116,7 +114,9 @@ class FootballSimulator:
 
     def refresh_live_data(self):
         db_dir = self.project_path("database")
-        result = self.live_data.refresh_all(db_dir, competition_code="PL")
+        assets_dir = self.project_path("assets")
+
+        result = self.live_data.refresh_all(db_dir, assets_dir, competition_code="PL")
         self.load_database()
 
         self.transfer_market.build_from_players(self.players_df)
@@ -151,9 +151,8 @@ class FootballSimulator:
                 self.away_box.set(self.team_list[1])
 
     def reload_side_panels(self):
-        self.table_box.delete("1.0", "end")
-        self.fixtures_box.delete("1.0", "end")
-        self.news_box.delete("1.0", "end")
+        for box in (self.table_box, self.fixtures_box, self.news_box):
+            box.delete("1.0", "end")
 
         try:
             table_df = pd.read_csv(self.project_path("database", "league_table.csv"))
@@ -258,6 +257,9 @@ class FootballSimulator:
         tk.Button(self.sidebar, text="⚙ Settings", command=self.open_settings, **btn_cfg).pack(pady=6)
         tk.Button(self.sidebar, text="❌ Quit", command=self.quit_app, **btn_cfg).pack(pady=6)
 
+        self.tactic_label = tk.Label(self.sidebar, text="Live tactics: waiting", bg="#0b2545", fg="#cbd5e1", justify="left", wraplength=250)
+        self.tactic_label.pack(pady=(18, 6), padx=12)
+
     def build_pitch(self, parent):
         self.pitch_wrap = tk.Frame(parent, bg="#0f172a")
         self.pitch_wrap.pack(side="left", fill="both", expand=True)
@@ -273,26 +275,41 @@ class FootballSimulator:
 
     def build_right_panel(self, parent):
         self.right_panel = tk.Frame(parent, bg="#0b2545", width=380)
-        self.right_panel.pack(side="right", fill="y")
+        self.right_panel.pack(side="right", fill="both")
 
-        tk.Label(self.right_panel, text="Match Statistics", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.stats_box = tk.Text(self.right_panel, height=8, width=44, bg="#091c34", fg="white")
+        self.right_canvas = tk.Canvas(self.right_panel, bg="#0b2545", highlightthickness=0, width=380)
+        self.right_scroll = tk.Scrollbar(self.right_panel, orient="vertical", command=self.right_canvas.yview)
+        self.right_inner = tk.Frame(self.right_canvas, bg="#0b2545")
+
+        self.right_inner.bind(
+            "<Configure>",
+            lambda e: self.right_canvas.configure(scrollregion=self.right_canvas.bbox("all"))
+        )
+
+        self.right_canvas.create_window((0, 0), window=self.right_inner, anchor="nw")
+        self.right_canvas.configure(yscrollcommand=self.right_scroll.set)
+
+        self.right_canvas.pack(side="left", fill="both", expand=True)
+        self.right_scroll.pack(side="right", fill="y")
+
+        tk.Label(self.right_inner, text="Match Statistics", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
+        self.stats_box = tk.Text(self.right_inner, height=8, width=44, bg="#091c34", fg="white")
         self.stats_box.pack(padx=10)
 
-        tk.Label(self.right_panel, text="Event Timeline", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.timeline_box = tk.Text(self.right_panel, height=8, width=44, bg="#091c34", fg="white")
+        tk.Label(self.right_inner, text="Event Timeline", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
+        self.timeline_box = tk.Text(self.right_inner, height=8, width=44, bg="#091c34", fg="white")
         self.timeline_box.pack(padx=10)
 
-        tk.Label(self.right_panel, text="League Table", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.table_box = tk.Text(self.right_panel, height=8, width=44, bg="#091c34", fg="white")
+        tk.Label(self.right_inner, text="League Table", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
+        self.table_box = tk.Text(self.right_inner, height=8, width=44, bg="#091c34", fg="white")
         self.table_box.pack(padx=10)
 
-        tk.Label(self.right_panel, text="Fixtures", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.fixtures_box = tk.Text(self.right_panel, height=6, width=44, bg="#091c34", fg="white")
+        tk.Label(self.right_inner, text="Fixtures", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
+        self.fixtures_box = tk.Text(self.right_inner, height=6, width=44, bg="#091c34", fg="white")
         self.fixtures_box.pack(padx=10)
 
-        tk.Label(self.right_panel, text="Club News", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.news_box = tk.Text(self.right_panel, height=6, width=44, bg="#091c34", fg="white")
+        tk.Label(self.right_inner, text="Club News", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
+        self.news_box = tk.Text(self.right_inner, height=6, width=44, bg="#091c34", fg="white")
         self.news_box.pack(padx=10)
 
     def build_footer(self):
@@ -403,6 +420,7 @@ class FootballSimulator:
         self.possession_label.config(text="Possession 50% - 50%")
         self.stats_box.delete("1.0", "end")
         self.timeline_box.delete("1.0", "end")
+        self.tactic_label.config(text="Live tactics: waiting")
 
         self.add_commentary("Match reset.")
 
@@ -452,6 +470,13 @@ class FootballSimulator:
             )
 
             self.engine.set_tactics(home_decision, away_decision)
+            self.tactic_label.config(
+                text=(
+                    f"Live tactics\n"
+                    f"Home: {home_decision['formation']} | {home_decision['shape']}\n"
+                    f"Away: {away_decision['formation']} | {away_decision['shape']}"
+                )
+            )
 
         self.root.after(2000, self.update_manager_tactics_loop)
 
@@ -474,6 +499,7 @@ class FootballSimulator:
         self.audio.play_goal()
         self.score_label.config(text=f"{self.home_score} - {self.away_score}")
         self.add_commentary(self.commentary_engine.goal_commentary())
+
         minute = max(1, self.match_time)
         side = self.home_name_label.cget("text") if team == "home" else self.away_name_label.cget("text")
         self.add_timeline_event(minute, "goal", f"Goal for {side}")
@@ -523,8 +549,7 @@ class FootballSimulator:
             self.get_team_morale(home),
             self.get_team_morale(away),
         )
-        self.add_commentary("Prediction reference after result:")
-        self.add_commentary(self.prediction_engine.format_prediction(home, away, pred))
+        self.add_commentary(self.prediction_engine.format_post_match_reference(home, away, pred, self.home_score, self.away_score))
 
     def update_clock(self):
         if hasattr(self, "engine") and self.engine.running and not self.match_finished:
@@ -545,7 +570,7 @@ class FootballSimulator:
     def open_settings(self):
         win = tk.Toplevel(self.root)
         win.title("Settings")
-        win.geometry("390x320")
+        win.geometry("400x340")
 
         tk.Label(win, text="Appearance", font=("Arial", 12, "bold")).pack(pady=10)
         tk.Button(win, text="Toggle Dark / Light", command=self.toggle_theme).pack(pady=6)
