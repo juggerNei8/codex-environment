@@ -9,17 +9,18 @@ class AnimationEngine:
         commentary_callback=None,
         goal_callback=None,
         possession_callback=None,
-        stats_callback=None
+        stats_callback=None,
+        timeline_callback=None
     ):
         self.canvas = canvas
         self.commentary_callback = commentary_callback
         self.goal_callback = goal_callback
         self.possession_callback = possession_callback
         self.stats_callback = stats_callback
+        self.timeline_callback = timeline_callback
 
         self.pitch_w = 900
         self.pitch_h = 500
-
         self.running = False
         self.frame_ms = 70
 
@@ -28,12 +29,9 @@ class AnimationEngine:
         self.home_formation = "4-3-3"
         self.away_formation = "4-2-3-1"
 
-        self.home_tactic = {"press": 0.58, "pass_speed": 1.0, "shot_bias": 0.11, "shape": "balanced"}
-        self.away_tactic = {"press": 0.58, "pass_speed": 1.0, "shot_bias": 0.11, "shape": "balanced"}
-
         self.players = []
         self.ball = None
-        self.logo_items = []
+        self.line_items = []
 
         self.ball_x = 450.0
         self.ball_y = 250.0
@@ -42,7 +40,6 @@ class AnimationEngine:
 
         self.home_score = 0
         self.away_score = 0
-
         self.home_pos_ticks = 1
         self.away_pos_ticks = 1
 
@@ -57,6 +54,9 @@ class AnimationEngine:
             "away_saves": 0
         }
 
+        self.home_tactic = {"press": 0.58, "pass_speed": 1.0, "shot_bias": 0.11, "shape": "balanced"}
+        self.away_tactic = {"press": 0.58, "pass_speed": 1.0, "shot_bias": 0.11, "shape": "balanced"}
+
         self.tick_count = 0
 
         self.draw_pitch()
@@ -65,6 +65,14 @@ class AnimationEngine:
         self.push_stats()
 
     # ------------------------------------------------
+
+    def say(self, text):
+        if self.commentary_callback:
+            self.commentary_callback(text)
+
+    def timeline(self, minute, kind, text):
+        if self.timeline_callback:
+            self.timeline_callback(minute, kind, text)
 
     def configure_match(self, home_team, away_team, home_formation, away_formation):
         self.home_team_name = home_team or "HOME"
@@ -80,10 +88,10 @@ class AnimationEngine:
             self.away_tactic = away_tactic
 
     def get_average_stamina(self, team):
-        team_players = [p for p in self.players if p["team"] == team]
-        if not team_players:
+        group = [p for p in self.players if p["team"] == team]
+        if not group:
             return 100.0
-        return sum(p["stamina"] for p in team_players) / len(team_players)
+        return sum(p["stamina"] for p in group) / len(group)
 
     def get_possession_snapshot(self):
         total = self.home_pos_ticks + self.away_pos_ticks
@@ -91,12 +99,22 @@ class AnimationEngine:
         away = 100 - home
         return home, away
 
+    def push_possession(self):
+        home, away = self.get_possession_snapshot()
+        if self.possession_callback:
+            self.possession_callback(home, away)
+
+    def push_stats(self):
+        if self.stats_callback:
+            self.stats_callback(self.stats.copy())
+
     # ------------------------------------------------
     # PITCH
     # ------------------------------------------------
 
     def draw_pitch(self):
         self.canvas.delete("all")
+        self.line_items = []
 
         stripe = 60
         for i in range(0, self.pitch_w, stripe):
@@ -115,14 +133,10 @@ class AnimationEngine:
         self.canvas.create_rectangle(0, 210, 10, 290, fill="white", outline="white")
         self.canvas.create_rectangle(890, 210, 900, 290, fill="white", outline="white")
 
-        # pitch-side team tags / badge placeholders
-        self.logo_items = []
-        home_tag = self.canvas.create_text(70, 25, text=self.home_team_name[:10], fill="white", font=("Arial", 10, "bold"))
-        away_tag = self.canvas.create_text(830, 25, text=self.away_team_name[:10], fill="white", font=("Arial", 10, "bold"))
-        self.logo_items.extend([home_tag, away_tag])
+        # pitch badges / fallback
+        self.canvas.create_text(70, 24, text=self.home_team_name[:10], fill="white", font=("Arial", 10, "bold"))
+        self.canvas.create_text(830, 24, text=self.away_team_name[:10], fill="white", font=("Arial", 10, "bold"))
 
-    # ------------------------------------------------
-    # PLAYERS
     # ------------------------------------------------
 
     def get_positions(self, formation, side):
@@ -223,19 +237,6 @@ class AnimationEngine:
                 return p
         return None
 
-    def say(self, text):
-        if self.commentary_callback:
-            self.commentary_callback(text)
-
-    def push_stats(self):
-        if self.stats_callback:
-            self.stats_callback(self.stats.copy())
-
-    def push_possession(self):
-        home, away = self.get_possession_snapshot()
-        if self.possession_callback:
-            self.possession_callback(home, away)
-
     # ------------------------------------------------
     # MOVEMENT
     # ------------------------------------------------
@@ -276,8 +277,20 @@ class AnimationEngine:
             p["stamina"] = max(35.0, p["stamina"] - 0.012)
 
     # ------------------------------------------------
-    # PASSING / SHOOTING / BALL
+    # PASSING / TRACKER LINES / SHOTS
     # ------------------------------------------------
+
+    def clear_tracker_lines(self):
+        for item in self.line_items:
+            try:
+                self.canvas.delete(item)
+            except Exception:
+                pass
+        self.line_items = []
+
+    def draw_tracker_line(self, x1, y1, x2, y2, color):
+        item = self.canvas.create_line(x1, y1, x2, y2, fill=color, width=2, dash=(4, 2))
+        self.line_items.append(item)
 
     def kick_ball_toward(self, tx, ty, power):
         dx = tx - self.ball_x
@@ -294,12 +307,16 @@ class AnimationEngine:
         if team == "home":
             mates = sorted(mates, key=lambda p: p["x"], reverse=True)
             speed = self.home_tactic["pass_speed"]
+            color = "#ffb4b4"
         else:
             mates = sorted(mates, key=lambda p: p["x"])
             speed = self.away_tactic["pass_speed"]
+            color = "#b9d7ff"
 
         target = random.choice(mates[:4] if len(mates) >= 4 else mates)
         tx, ty = self.center_of(target)
+
+        self.draw_tracker_line(self.ball_x, self.ball_y, tx, ty, color)
         self.kick_ball_toward(tx, ty, power=random.uniform(4.0, 6.4) * speed)
 
         if team == "home":
@@ -315,15 +332,16 @@ class AnimationEngine:
             goal_y = random.randint(220, 280)
             self.stats["home_shots"] += 1
             self.stats["home_on_target"] += 1
-            power = random.uniform(8.0, 11.5)
+            color = "#ffcccb"
         else:
             goal_x = 5
             goal_y = random.randint(220, 280)
             self.stats["away_shots"] += 1
             self.stats["away_on_target"] += 1
-            power = random.uniform(8.0, 11.5)
+            color = "#cbe1ff"
 
-        self.kick_ball_toward(goal_x, goal_y, power=power)
+        self.draw_tracker_line(self.ball_x, self.ball_y, goal_x, goal_y, color)
+        self.kick_ball_toward(goal_x, goal_y, power=random.uniform(8.0, 11.5))
         self.say("Shot taken!")
 
     def maybe_action(self):
@@ -350,6 +368,13 @@ class AnimationEngine:
             self.attempt_shot(team)
         else:
             self.pass_ball(team)
+
+        # occasional timeline events
+        minute = min(99, max(1, self.tick_count // 14))
+        if random.random() < 0.03:
+            self.timeline(minute, "card", "Yellow card shown for a late challenge.")
+        if random.random() < 0.02:
+            self.timeline(minute, "substitution", "Tactical substitution made.")
 
     def move_ball(self):
         self.ball_x += self.ball_dx
@@ -422,6 +447,9 @@ class AnimationEngine:
 
         try:
             self.tick_count += 1
+
+            if self.tick_count % 10 == 0:
+                self.clear_tracker_lines()
 
             self.move_players()
 

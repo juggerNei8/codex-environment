@@ -12,18 +12,19 @@ from prediction_engine import PredictionEngine
 from manager_ai import ManagerAI
 from transfer_market import TransferMarket
 from logo_loader import LogoLoader
+from timeline_engine import TimelineEngine
 
 
 class FootballSimulator:
     def __init__(self, root):
         self.root = root
         self.root.title("Football Match Simulator")
-        self.root.geometry("1500x920")
+        self.root.geometry("1540x940")
         self.root.configure(bg="#0f172a")
 
         self.dark_mode = True
         self.match_duration_seconds = 8
-        self.live_refresh_ms = 10 * 60 * 1000  # 10 minutes
+        self.live_refresh_ms = 10 * 60 * 1000
 
         self.home_score = 0
         self.away_score = 0
@@ -38,6 +39,7 @@ class FootballSimulator:
         self.manager_ai = ManagerAI()
         self.transfer_market = TransferMarket()
         self.logo_loader = LogoLoader()
+        self.timeline_engine = TimelineEngine()
 
         self.team_list = []
         self.teams_df = pd.DataFrame()
@@ -52,7 +54,8 @@ class FootballSimulator:
             commentary_callback=self.add_commentary,
             goal_callback=self.goal_scored,
             possession_callback=self.update_possession,
-            stats_callback=self.update_stats
+            stats_callback=self.update_stats,
+            timeline_callback=self.add_timeline_event
         )
 
         self.refresh_live_data()
@@ -61,15 +64,11 @@ class FootballSimulator:
         self.schedule_live_refresh_loop()
 
     # ------------------------------------------------
-    # PATHS
-    # ------------------------------------------------
 
     def project_path(self, *parts):
         base_dir = os.path.dirname(os.path.abspath(__file__))
         return os.path.normpath(os.path.join(base_dir, "..", *parts))
 
-    # ------------------------------------------------
-    # DATABASE
     # ------------------------------------------------
 
     def ensure_database_files(self):
@@ -94,9 +93,7 @@ class FootballSimulator:
     def load_database(self):
         self.ensure_database_files()
 
-        teams_path = self.project_path("database", "teams.csv")
-        self.teams_df = pd.read_csv(teams_path)
-
+        self.teams_df = pd.read_csv(self.project_path("database", "teams.csv"))
         if "team" not in self.teams_df.columns:
             first_col = self.teams_df.columns[0]
             self.teams_df = self.teams_df.rename(columns={first_col: "team"})
@@ -119,16 +116,14 @@ class FootballSimulator:
 
     def refresh_live_data(self):
         db_dir = self.project_path("database")
-
         result = self.live_data.refresh_all(db_dir, competition_code="PL")
-        self.live_data.ensure_players_exists(db_dir)
-
         self.load_database()
-        self.reload_selectors()
-        self.reload_side_panels()
 
         self.transfer_market.build_from_players(self.players_df)
         self.transfer_market.save_to_csv(db_dir)
+
+        self.reload_selectors()
+        self.reload_side_panels()
 
         if result["updated"]:
             self.add_commentary("Live football data refreshed.")
@@ -139,8 +134,11 @@ class FootballSimulator:
             self.add_commentary(note)
 
     def schedule_live_refresh_loop(self):
+        self.root.after(self.live_refresh_ms, self._live_refresh_wrapper)
+
+    def _live_refresh_wrapper(self):
         self.refresh_live_data()
-        self.root.after(self.live_refresh_ms, self.schedule_live_refresh_loop)
+        self.schedule_live_refresh_loop()
 
     def reload_selectors(self):
         self.home_box["values"] = self.team_list
@@ -274,23 +272,27 @@ class FootballSimulator:
         self.canvas.pack(expand=True, pady=26)
 
     def build_right_panel(self, parent):
-        self.right_panel = tk.Frame(parent, bg="#0b2545", width=350)
+        self.right_panel = tk.Frame(parent, bg="#0b2545", width=380)
         self.right_panel.pack(side="right", fill="y")
 
         tk.Label(self.right_panel, text="Match Statistics", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.stats_box = tk.Text(self.right_panel, height=10, width=40, bg="#091c34", fg="white")
+        self.stats_box = tk.Text(self.right_panel, height=8, width=44, bg="#091c34", fg="white")
         self.stats_box.pack(padx=10)
 
+        tk.Label(self.right_panel, text="Event Timeline", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
+        self.timeline_box = tk.Text(self.right_panel, height=8, width=44, bg="#091c34", fg="white")
+        self.timeline_box.pack(padx=10)
+
         tk.Label(self.right_panel, text="League Table", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.table_box = tk.Text(self.right_panel, height=9, width=40, bg="#091c34", fg="white")
+        self.table_box = tk.Text(self.right_panel, height=8, width=44, bg="#091c34", fg="white")
         self.table_box.pack(padx=10)
 
         tk.Label(self.right_panel, text="Fixtures", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.fixtures_box = tk.Text(self.right_panel, height=7, width=40, bg="#091c34", fg="white")
+        self.fixtures_box = tk.Text(self.right_panel, height=6, width=44, bg="#091c34", fg="white")
         self.fixtures_box.pack(padx=10)
 
         tk.Label(self.right_panel, text="Club News", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.news_box = tk.Text(self.right_panel, height=7, width=40, bg="#091c34", fg="white")
+        self.news_box = tk.Text(self.right_panel, height=6, width=44, bg="#091c34", fg="white")
         self.news_box.pack(padx=10)
 
     def build_footer(self):
@@ -298,7 +300,7 @@ class FootballSimulator:
         self.commentary_box.pack(fill="x")
 
     # ------------------------------------------------
-    # MATCH CONTROL
+    # HELPERS
     # ------------------------------------------------
 
     def get_team_strength(self, team_name):
@@ -336,6 +338,10 @@ class FootballSimulator:
             self.away_logo_label.config(image=away_logo)
             self.away_logo_label.image = away_logo
 
+    # ------------------------------------------------
+    # MATCH CONTROL
+    # ------------------------------------------------
+
     def start_match(self):
         home = self.home_box.get().strip()
         away = self.away_box.get().strip()
@@ -345,6 +351,9 @@ class FootballSimulator:
         if not home or not away:
             self.add_commentary("Please select both teams.")
             return
+
+        self.timeline_engine.clear()
+        self.timeline_box.delete("1.0", "end")
 
         self.home_name_label.config(text=home)
         self.away_name_label.config(text=away)
@@ -382,6 +391,7 @@ class FootballSimulator:
     def reset_match(self):
         self.engine.reset_match()
         self.engine.running = False
+        self.timeline_engine.clear()
 
         self.home_score = 0
         self.away_score = 0
@@ -392,6 +402,7 @@ class FootballSimulator:
         self.score_label.config(text="0 - 0")
         self.possession_label.config(text="Possession 50% - 50%")
         self.stats_box.delete("1.0", "end")
+        self.timeline_box.delete("1.0", "end")
 
         self.add_commentary("Match reset.")
 
@@ -401,7 +412,7 @@ class FootballSimulator:
 
         win = tk.Toplevel(self.root)
         win.title("Transfer Market")
-        win.geometry("540x430")
+        win.geometry("560x430")
 
         box = tk.Text(win, bg="#091c34", fg="white")
         box.pack(fill="both", expand=True)
@@ -445,8 +456,14 @@ class FootballSimulator:
         self.root.after(2000, self.update_manager_tactics_loop)
 
     # ------------------------------------------------
-    # UI UPDATES
+    # EVENTS / UPDATES
     # ------------------------------------------------
+
+    def add_timeline_event(self, minute, kind, text):
+        self.timeline_engine.add_event(minute, kind, text)
+        self.timeline_box.delete("1.0", "end")
+        for line in self.timeline_engine.as_lines()[-18:]:
+            self.timeline_box.insert("end", line + "\n")
 
     def goal_scored(self, team):
         if team == "home":
@@ -457,6 +474,9 @@ class FootballSimulator:
         self.audio.play_goal()
         self.score_label.config(text=f"{self.home_score} - {self.away_score}")
         self.add_commentary(self.commentary_engine.goal_commentary())
+        minute = max(1, self.match_time)
+        side = self.home_name_label.cget("text") if team == "home" else self.away_name_label.cget("text")
+        self.add_timeline_event(minute, "goal", f"Goal for {side}")
 
     def update_possession(self, home, away):
         self.possession_label.config(text=f"Possession {home}% - {away}%")
@@ -475,7 +495,7 @@ class FootballSimulator:
     def add_commentary(self, text):
         self.commentary_box.insert("end", text + "\n")
         lines = int(self.commentary_box.index("end-1c").split(".")[0])
-        if lines > 200:
+        if lines > 220:
             self.commentary_box.delete("1.0", "2.0")
         self.commentary_box.see("end")
 
@@ -525,7 +545,7 @@ class FootballSimulator:
     def open_settings(self):
         win = tk.Toplevel(self.root)
         win.title("Settings")
-        win.geometry("380x300")
+        win.geometry("390x320")
 
         tk.Label(win, text="Appearance", font=("Arial", 12, "bold")).pack(pady=10)
         tk.Button(win, text="Toggle Dark / Light", command=self.toggle_theme).pack(pady=6)
