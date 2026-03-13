@@ -21,11 +21,9 @@ class PlayerDatabase:
 
         if self.players.empty:
             self.players = self.generate_from_teams(teams_path)
-            self.players.to_csv(players_path, index=False)
-            return self.players
+        else:
+            self.players = self.enrich_existing(self.players, teams_path)
 
-        # enrich sparse database
-        self.players = self.enrich_existing(self.players, teams_path)
         self.players.to_csv(players_path, index=False)
         return self.players
 
@@ -40,7 +38,7 @@ class PlayerDatabase:
             first_col = teams_df.columns[0]
             teams_df = teams_df.rename(columns={first_col: "team"})
 
-        formation_positions = [
+        template_positions = [
             "GK",
             "LB", "CB", "CB", "RB",
             "CM", "CM", "CAM",
@@ -52,20 +50,22 @@ class PlayerDatabase:
         for team in teams_df["team"].dropna().astype(str).tolist():
             base_strength = 75
             if "strength" in teams_df.columns:
-                value = teams_df.loc[teams_df["team"] == team, "strength"]
-                if not value.empty:
-                    base_strength = int(value.iloc[0])
+                val = teams_df.loc[teams_df["team"] == team, "strength"]
+                if not val.empty:
+                    base_strength = int(val.iloc[0])
 
-            for i, pos in enumerate(formation_positions, start=1):
+            for i, pos in enumerate(template_positions, start=1):
                 rating = max(58, min(95, int(random.gauss(base_strength, 6))))
-                value = int(max(1, rating - 50) * random.uniform(0.6, 2.2))
+                value = int(max(1, rating - 50) * random.uniform(0.8, 2.5))
                 rows.append({
                     "player": f"{team.replace(' ', '_')}_{pos}_{i}",
                     "team": team,
                     "position": pos,
                     "rating": rating,
                     "value": value,
-                    "stamina": 100
+                    "stamina": 100,
+                    "injury_risk": round(random.uniform(0.02, 0.18), 3),
+                    "form": round(random.uniform(0.45, 0.88), 3)
                 })
 
         return pd.DataFrame(rows)
@@ -73,17 +73,20 @@ class PlayerDatabase:
     # ------------------------------------------------
 
     def enrich_existing(self, df, teams_path):
-        needed_cols = ["player", "team", "position", "rating", "value", "stamina"]
-        for col in needed_cols:
+        required = ["player", "team", "position", "rating", "value", "stamina", "injury_risk", "form"]
+        for col in required:
             if col not in df.columns:
                 if col == "value":
                     df[col] = 10
                 elif col == "stamina":
                     df[col] = 100
+                elif col == "injury_risk":
+                    df[col] = 0.08
+                elif col == "form":
+                    df[col] = 0.60
                 else:
                     df[col] = ""
 
-        # top up teams with too few players
         counts = df.groupby("team").size().to_dict()
         generated = self.generate_from_teams(teams_path)
 
@@ -91,8 +94,8 @@ class PlayerDatabase:
         for team, team_df in generated.groupby("team"):
             current = counts.get(team, 0)
             if current < 14:
-                needed = 16 - current
-                add_rows.extend(team_df.head(max(0, needed)).to_dict("records"))
+                need = 16 - current
+                add_rows.extend(team_df.head(max(0, need)).to_dict("records"))
 
         if add_rows:
             df = pd.concat([df, pd.DataFrame(add_rows)], ignore_index=True)

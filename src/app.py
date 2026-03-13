@@ -7,7 +7,6 @@ from animation_engine import AnimationEngine
 from audio_engine import AudioEngine
 from commentary_engine import CommentaryEngine
 from live_data_hub import LiveDataHub
-from season_engine import SeasonEngine
 from player_database import PlayerDatabase
 from prediction_engine import PredictionEngine
 from manager_ai import ManagerAI
@@ -19,11 +18,12 @@ class FootballSimulator:
     def __init__(self, root):
         self.root = root
         self.root.title("Football Match Simulator")
-        self.root.geometry("1500x900")
+        self.root.geometry("1500x920")
         self.root.configure(bg="#0f172a")
 
         self.dark_mode = True
         self.match_duration_seconds = 8
+        self.live_refresh_ms = 10 * 60 * 1000  # 10 minutes
 
         self.home_score = 0
         self.away_score = 0
@@ -33,7 +33,6 @@ class FootballSimulator:
         self.audio = AudioEngine()
         self.commentary_engine = CommentaryEngine()
         self.live_data = LiveDataHub()
-        self.season_engine = SeasonEngine()
         self.player_db = PlayerDatabase()
         self.prediction_engine = PredictionEngine()
         self.manager_ai = ManagerAI()
@@ -43,6 +42,7 @@ class FootballSimulator:
         self.team_list = []
         self.teams_df = pd.DataFrame()
         self.players_df = pd.DataFrame()
+        self.team_form_df = pd.DataFrame()
 
         self.load_database()
         self.build_ui()
@@ -58,6 +58,7 @@ class FootballSimulator:
         self.refresh_live_data()
         self.update_clock()
         self.update_manager_tactics_loop()
+        self.schedule_live_refresh_loop()
 
     # ------------------------------------------------
     # PATHS
@@ -81,6 +82,7 @@ class FootballSimulator:
             "fixtures.csv": "home,away,competition,utcDate,status\nArsenal,Chelsea,League,,SCHEDULED\nBarcelona,Real Madrid,League,,SCHEDULED\n",
             "league_table.csv": "team,played,wins,draws,losses,gd,points\nArsenal,0,0,0,0,0,0\nChelsea,0,0,0,0,0,0\nBarcelona,0,0,0,0,0,0\nReal Madrid,0,0,0,0,0,0\n",
             "club_news.csv": "team,title,summary\nGeneral,Startup,Simulator started with local data.\n",
+            "team_form.csv": "team,form_last5,injuries_count,cards_pressure,morale\nArsenal,0.62,0,0.15,0.68\nChelsea,0.58,1,0.18,0.64\nBarcelona,0.66,0,0.14,0.72\nReal Madrid,0.69,0,0.12,0.75\n",
         }
 
         for filename, content in defaults.items():
@@ -103,6 +105,13 @@ class FootballSimulator:
         print("Teams loaded:", len(self.team_list))
 
         self.players_df = self.player_db.load_or_enrich(self.project_path("database"))
+
+        form_path = self.project_path("database", "team_form.csv")
+        if os.path.exists(form_path) and os.path.getsize(form_path) > 0:
+            try:
+                self.team_form_df = pd.read_csv(form_path)
+            except Exception:
+                self.team_form_df = pd.DataFrame()
 
     # ------------------------------------------------
     # LIVE REFRESH
@@ -129,13 +138,19 @@ class FootballSimulator:
         for note in result["notes"]:
             self.add_commentary(note)
 
+    def schedule_live_refresh_loop(self):
+        self.refresh_live_data()
+        self.root.after(self.live_refresh_ms, self.schedule_live_refresh_loop)
+
     def reload_selectors(self):
         self.home_box["values"] = self.team_list
         self.away_box["values"] = self.team_list
 
         if len(self.team_list) >= 2:
-            self.home_box.set(self.team_list[0])
-            self.away_box.set(self.team_list[1])
+            if not self.home_box.get():
+                self.home_box.set(self.team_list[0])
+            if not self.away_box.get():
+                self.away_box.set(self.team_list[1])
 
     def reload_side_panels(self):
         self.table_box.delete("1.0", "end")
@@ -144,21 +159,21 @@ class FootballSimulator:
 
         try:
             table_df = pd.read_csv(self.project_path("database", "league_table.csv"))
-            for _, row in table_df.head(12).iterrows():
+            for _, row in table_df.head(16).iterrows():
                 self.table_box.insert("end", f"{row.get('team','')}  P:{row.get('played',0)}  Pts:{row.get('points',0)}\n")
         except Exception:
             self.table_box.insert("end", "League table unavailable.\n")
 
         try:
             fix_df = pd.read_csv(self.project_path("database", "fixtures.csv"))
-            for _, row in fix_df.head(12).iterrows():
+            for _, row in fix_df.head(14).iterrows():
                 self.fixtures_box.insert("end", f"{row.get('home','')} vs {row.get('away','')}  {row.get('status','')}\n")
         except Exception:
             self.fixtures_box.insert("end", "Fixtures unavailable.\n")
 
         try:
             news_df = pd.read_csv(self.project_path("database", "club_news.csv"))
-            for _, row in news_df.head(8).iterrows():
+            for _, row in news_df.head(10).iterrows():
                 self.news_box.insert("end", f"{row.get('title','')}\n{row.get('summary','')}\n\n")
         except Exception:
             self.news_box.insert("end", "Club news unavailable.\n")
@@ -241,7 +256,6 @@ class FootballSimulator:
         tk.Button(self.sidebar, text="⏸ Pause Match", command=self.pause_match, **btn_cfg).pack(pady=6)
         tk.Button(self.sidebar, text="🔄 Reset Match", command=self.reset_match, **btn_cfg).pack(pady=6)
         tk.Button(self.sidebar, text="🔃 Refresh Live Data", command=self.refresh_live_data, **btn_cfg).pack(pady=6)
-        tk.Button(self.sidebar, text="📅 Season Mode", command=self.start_season_mode, **btn_cfg).pack(pady=6)
         tk.Button(self.sidebar, text="💰 Transfer Market", command=self.open_transfer_market, **btn_cfg).pack(pady=6)
         tk.Button(self.sidebar, text="⚙ Settings", command=self.open_settings, **btn_cfg).pack(pady=6)
         tk.Button(self.sidebar, text="❌ Quit", command=self.quit_app, **btn_cfg).pack(pady=6)
@@ -280,7 +294,7 @@ class FootballSimulator:
         self.news_box.pack(padx=10)
 
     def build_footer(self):
-        self.commentary_box = tk.Text(self.root, height=7, bg="#020617", fg="white")
+        self.commentary_box = tk.Text(self.root, height=8, bg="#020617", fg="white")
         self.commentary_box.pack(fill="x")
 
     # ------------------------------------------------
@@ -294,11 +308,21 @@ class FootballSimulator:
         except Exception:
             return 75.0
 
+    def get_form_row(self, team_name):
+        if self.team_form_df is None or self.team_form_df.empty:
+            return None
+        rows = self.team_form_df[self.team_form_df["team"] == team_name]
+        if rows.empty:
+            return None
+        return rows.iloc[0]
+
     def get_team_form(self, team_name):
-        return 0.62
+        row = self.get_form_row(team_name)
+        return float(row["form_last5"]) if row is not None and "form_last5" in row else 0.60
 
     def get_team_morale(self, team_name):
-        return 0.65
+        row = self.get_form_row(team_name)
+        return float(row["morale"]) if row is not None and "morale" in row else 0.65
 
     def load_header_logos(self, home, away):
         home_logo = self.logo_loader.load(home)
@@ -326,7 +350,6 @@ class FootballSimulator:
         self.away_name_label.config(text=away)
         self.load_header_logos(home, away)
 
-        # pre-match prediction
         prediction = self.prediction_engine.predict_match(
             self.get_team_strength(home),
             self.get_team_strength(away),
@@ -371,18 +394,6 @@ class FootballSimulator:
         self.stats_box.delete("1.0", "end")
 
         self.add_commentary("Match reset.")
-
-    def start_season_mode(self):
-        db_dir = self.project_path("database")
-        self.season_engine.load_teams_from_csv(db_dir)
-        self.season_engine.load_fixtures_from_csv(db_dir)
-
-        if not self.season_engine.fixtures:
-            self.season_engine.generate_fixtures()
-            self.season_engine.save_fixtures_csv(db_dir)
-
-        self.reload_side_panels()
-        self.add_commentary(f"Season mode ready. Teams: {len(self.season_engine.teams)} | Fixtures: {len(self.season_engine.fixtures)}")
 
     def open_transfer_market(self):
         db_dir = self.project_path("database")
@@ -464,7 +475,7 @@ class FootballSimulator:
     def add_commentary(self, text):
         self.commentary_box.insert("end", text + "\n")
         lines = int(self.commentary_box.index("end-1c").split(".")[0])
-        if lines > 180:
+        if lines > 200:
             self.commentary_box.delete("1.0", "2.0")
         self.commentary_box.see("end")
 
@@ -482,14 +493,7 @@ class FootballSimulator:
         home = self.home_box.get().strip()
         away = self.away_box.get().strip()
 
-        db_dir = self.project_path("database")
-        self.season_engine.load_teams_from_csv(db_dir)
-        self.season_engine.record_result(home, away, self.home_score, self.away_score)
-        self.season_engine.save_table_csv(db_dir)
-        self.reload_side_panels()
-
-        result_line = f"Full time: {home} {self.home_score} - {self.away_score} {away}"
-        self.add_commentary(result_line)
+        self.add_commentary(f"Full time: {home} {self.home_score} - {self.away_score} {away}")
 
         pred = self.prediction_engine.predict_match(
             self.get_team_strength(home),
@@ -521,7 +525,7 @@ class FootballSimulator:
     def open_settings(self):
         win = tk.Toplevel(self.root)
         win.title("Settings")
-        win.geometry("360x260")
+        win.geometry("380x300")
 
         tk.Label(win, text="Appearance", font=("Arial", 12, "bold")).pack(pady=10)
         tk.Button(win, text="Toggle Dark / Light", command=self.toggle_theme).pack(pady=6)
@@ -530,10 +534,16 @@ class FootballSimulator:
         tk.Label(win, text="Simulation", font=("Arial", 12, "bold")).pack(pady=10)
         tk.Button(win, text="Set Match Length = 5s", command=lambda: self.set_match_duration(5)).pack(pady=4)
         tk.Button(win, text="Set Match Length = 8s", command=lambda: self.set_match_duration(8)).pack(pady=4)
+        tk.Button(win, text="Set Live Refresh = 10 min", command=lambda: self.set_live_refresh(10)).pack(pady=4)
+        tk.Button(win, text="Set Live Refresh = 15 min", command=lambda: self.set_live_refresh(15)).pack(pady=4)
 
     def set_match_duration(self, secs):
         self.match_duration_seconds = secs
         self.add_commentary(f"Match duration set to {secs} seconds.")
+
+    def set_live_refresh(self, mins):
+        self.live_refresh_ms = mins * 60 * 1000
+        self.add_commentary(f"Live data refresh set to every {mins} minutes.")
 
     def toggle_theme(self):
         self.dark_mode = not self.dark_mode
