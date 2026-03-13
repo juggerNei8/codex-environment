@@ -28,11 +28,15 @@ class AnimationEngine:
         self.home_formation = "4-3-3"
         self.away_formation = "4-2-3-1"
 
+        self.home_tactic = {"press": 0.58, "pass_speed": 1.0, "shot_bias": 0.11, "shape": "balanced"}
+        self.away_tactic = {"press": 0.58, "pass_speed": 1.0, "shot_bias": 0.11, "shape": "balanced"}
+
         self.players = []
         self.ball = None
+        self.logo_items = []
 
-        self.ball_x = 450
-        self.ball_y = 250
+        self.ball_x = 450.0
+        self.ball_y = 250.0
         self.ball_dx = 0.0
         self.ball_dy = 0.0
 
@@ -60,8 +64,6 @@ class AnimationEngine:
         self.create_ball()
         self.push_stats()
 
-    # ------------------------------------------------
-    # PUBLIC CONTROL
     # ------------------------------------------------
 
     def configure_match(self, home_team, away_team, home_formation, away_formation):
@@ -71,37 +73,23 @@ class AnimationEngine:
         self.away_formation = away_formation or "4-2-3-1"
         self.reset_match()
 
-    def reset_match(self):
-        self.running = False
+    def set_tactics(self, home_tactic, away_tactic):
+        if home_tactic:
+            self.home_tactic = home_tactic
+        if away_tactic:
+            self.away_tactic = away_tactic
 
-        self.home_score = 0
-        self.away_score = 0
+    def get_average_stamina(self, team):
+        team_players = [p for p in self.players if p["team"] == team]
+        if not team_players:
+            return 100.0
+        return sum(p["stamina"] for p in team_players) / len(team_players)
 
-        self.home_pos_ticks = 1
-        self.away_pos_ticks = 1
-
-        self.stats = {
-            "home_shots": 0,
-            "away_shots": 0,
-            "home_on_target": 0,
-            "away_on_target": 0,
-            "home_passes": 0,
-            "away_passes": 0,
-            "home_saves": 0,
-            "away_saves": 0
-        }
-
-        self.ball_x = 450
-        self.ball_y = 250
-        self.ball_dx = 0.0
-        self.ball_dy = 0.0
-        self.tick_count = 0
-
-        self.draw_pitch()
-        self.create_players()
-        self.create_ball()
-        self.push_possession()
-        self.push_stats()
+    def get_possession_snapshot(self):
+        total = self.home_pos_ticks + self.away_pos_ticks
+        home = int(self.home_pos_ticks / total * 100)
+        away = 100 - home
+        return home, away
 
     # ------------------------------------------------
     # PITCH
@@ -118,20 +106,23 @@ class AnimationEngine:
         self.canvas.create_line(self.pitch_w / 2, 0, self.pitch_w / 2, self.pitch_h, fill="white", width=2)
         self.canvas.create_oval(390, 190, 510, 310, outline="white", width=2)
 
-        # penalty boxes
         self.canvas.create_rectangle(0, 140, 120, 360, outline="white", width=2)
         self.canvas.create_rectangle(780, 140, 900, 360, outline="white", width=2)
 
-        # 6-yard boxes
         self.canvas.create_rectangle(0, 190, 50, 310, outline="white", width=2)
         self.canvas.create_rectangle(850, 190, 900, 310, outline="white", width=2)
 
-        # goals / net feel
         self.canvas.create_rectangle(0, 210, 10, 290, fill="white", outline="white")
         self.canvas.create_rectangle(890, 210, 900, 290, fill="white", outline="white")
 
+        # pitch-side team tags / badge placeholders
+        self.logo_items = []
+        home_tag = self.canvas.create_text(70, 25, text=self.home_team_name[:10], fill="white", font=("Arial", 10, "bold"))
+        away_tag = self.canvas.create_text(830, 25, text=self.away_team_name[:10], fill="white", font=("Arial", 10, "bold"))
+        self.logo_items.extend([home_tag, away_tag])
+
     # ------------------------------------------------
-    # PLAYERS / FORMATIONS
+    # PLAYERS
     # ------------------------------------------------
 
     def get_positions(self, formation, side):
@@ -144,7 +135,6 @@ class AnimationEngine:
                     ("LW", 430, 110), ("CAM", 430, 250), ("RW", 430, 390),
                     ("ST", 560, 250)
                 ]
-            # default 4-3-3
             return [
                 ("GK", 70, 250),
                 ("LB", 180, 90), ("CB", 180, 195), ("CB", 180, 305), ("RB", 180, 410),
@@ -152,7 +142,6 @@ class AnimationEngine:
                 ("LW", 500, 120), ("ST", 560, 250), ("RW", 500, 380)
             ]
 
-        # away
         if formation == "4-2-3-1":
             return [
                 ("GK", 830, 250),
@@ -210,8 +199,6 @@ class AnimationEngine:
         self.ball = self.canvas.create_oval(self.ball_x, self.ball_y, self.ball_x + 10, self.ball_y + 10, fill="white", outline="black")
 
     # ------------------------------------------------
-    # HELPERS
-    # ------------------------------------------------
 
     def center_of(self, player):
         return player["x"] + 8, player["y"] + 8
@@ -236,56 +223,49 @@ class AnimationEngine:
                 return p
         return None
 
-    def push_possession(self):
-        total = self.home_pos_ticks + self.away_pos_ticks
-        home = int(self.home_pos_ticks / total * 100)
-        away = 100 - home
-        if self.possession_callback:
-            self.possession_callback(home, away)
+    def say(self, text):
+        if self.commentary_callback:
+            self.commentary_callback(text)
 
     def push_stats(self):
         if self.stats_callback:
             self.stats_callback(self.stats.copy())
 
-    def say(self, text):
-        if self.commentary_callback:
-            self.commentary_callback(text)
+    def push_possession(self):
+        home, away = self.get_possession_snapshot()
+        if self.possession_callback:
+            self.possession_callback(home, away)
 
     # ------------------------------------------------
-    # PLAYER MOVEMENT / STAMINA
+    # MOVEMENT
     # ------------------------------------------------
 
     def move_players(self):
-        nearest, dist = self.find_nearest_player()
+        nearest, _ = self.find_nearest_player()
 
         for p in self.players:
             px, py = self.center_of(p)
-
-            # default: keep shape
             target_x = p["home_x"]
             target_y = p["home_y"]
 
-            # near-ball pressing
             if nearest is not None and p is nearest:
                 target_x = self.ball_x
                 target_y = self.ball_y
 
-            # attackers push higher when ball in attacking half
-            if p["team"] == "home" and p["role"] in ("ST", "LW", "RW", "CAM"):
-                if self.ball_x > 450:
-                    target_x = min(780, target_x + 40)
+            tactic = self.home_tactic if p["team"] == "home" else self.away_tactic
 
-            if p["team"] == "away" and p["role"] in ("ST", "LW", "RW", "CAM"):
-                if self.ball_x < 450:
-                    target_x = max(120, target_x - 40)
+            if p["team"] == "home" and p["role"] in ("ST", "LW", "RW", "CAM") and tactic["shape"] == "attack":
+                target_x = min(800, target_x + 35)
+
+            if p["team"] == "away" and p["role"] in ("ST", "LW", "RW", "CAM") and tactic["shape"] == "attack":
+                target_x = max(100, target_x - 35)
 
             dx = (target_x - px) * 0.03
             dy = (target_y - py) * 0.03
 
-            # stamina affects movement
-            pace_factor = max(0.45, p["stamina"] / 100.0)
-            dx *= pace_factor
-            dy *= pace_factor
+            pace = max(0.45, p["stamina"] / 100.0)
+            dx *= pace
+            dy *= pace
 
             p["x"] += dx
             p["y"] += dy
@@ -293,17 +273,16 @@ class AnimationEngine:
             self.canvas.move(p["obj"], dx, dy)
             self.canvas.move(p["label"], dx, dy)
 
-            p["stamina"] = max(35.0, p["stamina"] - 0.01)
+            p["stamina"] = max(35.0, p["stamina"] - 0.012)
 
     # ------------------------------------------------
-    # BALL TRAJECTORY / PASSING / SHOOTING
+    # PASSING / SHOOTING / BALL
     # ------------------------------------------------
 
     def kick_ball_toward(self, tx, ty, power):
         dx = tx - self.ball_x
         dy = ty - self.ball_y
         dist = math.hypot(dx, dy) + 0.0001
-
         self.ball_dx = (dx / dist) * power
         self.ball_dy = (dy / dist) * power
 
@@ -312,15 +291,16 @@ class AnimationEngine:
         if not mates:
             return
 
-        # prefer advanced teammate
         if team == "home":
             mates = sorted(mates, key=lambda p: p["x"], reverse=True)
+            speed = self.home_tactic["pass_speed"]
         else:
             mates = sorted(mates, key=lambda p: p["x"])
+            speed = self.away_tactic["pass_speed"]
 
         target = random.choice(mates[:4] if len(mates) >= 4 else mates)
         tx, ty = self.center_of(target)
-        self.kick_ball_toward(tx, ty, power=random.uniform(4.0, 7.0))
+        self.kick_ball_toward(tx, ty, power=random.uniform(4.0, 6.4) * speed)
 
         if team == "home":
             self.home_pos_ticks += 1
@@ -332,42 +312,43 @@ class AnimationEngine:
     def attempt_shot(self, team):
         if team == "home":
             goal_x = 895
-            goal_y = random.randint(215, 285)
+            goal_y = random.randint(220, 280)
             self.stats["home_shots"] += 1
+            self.stats["home_on_target"] += 1
+            power = random.uniform(8.0, 11.5)
         else:
             goal_x = 5
-            goal_y = random.randint(215, 285)
+            goal_y = random.randint(220, 280)
             self.stats["away_shots"] += 1
+            self.stats["away_on_target"] += 1
+            power = random.uniform(8.0, 11.5)
 
-        self.kick_ball_toward(goal_x, goal_y, power=random.uniform(8.0, 11.0))
+        self.kick_ball_toward(goal_x, goal_y, power=power)
         self.say("Shot taken!")
 
     def maybe_action(self):
         nearest, dist = self.find_nearest_player()
 
-        if nearest is None or dist > 35:
+        if nearest is None or dist > 36:
             return
 
         team = nearest["team"]
         role = nearest["role"]
 
-        # in possession
         if team == "home":
             self.home_pos_ticks += 1
-        else:
-            self.away_pos_ticks += 1
-
-        # shot selection by role and field position
-        if team == "home":
+            tactic = self.home_tactic
             close_to_goal = self.ball_x > 700
         else:
+            self.away_pos_ticks += 1
+            tactic = self.away_tactic
             close_to_goal = self.ball_x < 200
 
-        if role in ("ST", "LW", "RW", "CAM") and close_to_goal and random.random() < 0.16:
+        shot_bias = tactic["shot_bias"]
+
+        if role in ("ST", "LW", "RW", "CAM") and close_to_goal and random.random() < shot_bias:
             self.attempt_shot(team)
         else:
-            if random.random() < 0.25:
-                self.say("Quick passing move.")
             self.pass_ball(team)
 
     def move_ball(self):
@@ -380,61 +361,50 @@ class AnimationEngine:
         self.canvas.coords(self.ball, self.ball_x, self.ball_y, self.ball_x + 10, self.ball_y + 10)
 
     # ------------------------------------------------
-    # GOALKEEPER SAVES / GOALS
+    # GK / GOALS
     # ------------------------------------------------
 
     def goalkeeper_dive(self, keeper, direction):
-        dive = 18 if direction == "right" else -18
+        dive = 16 if direction == "right" else -16
         self.canvas.move(keeper["obj"], dive, 0)
         self.canvas.move(keeper["label"], dive, 0)
         keeper["x"] += dive
 
     def maybe_goalkeeper_save(self):
-        # left keeper saves away attacks
         left_gk = self.goalkeeper_for("home")
         right_gk = self.goalkeeper_for("away")
 
-        # ball near left goal
         if self.ball_x < 80 and 180 < self.ball_y < 320 and left_gk:
             self.goalkeeper_dive(left_gk, "left")
             if random.random() < 0.65:
-                self.ball_dx = abs(self.ball_dx) * 0.6
-                self.ball_dy *= 0.4
+                self.ball_dx = abs(self.ball_dx) * 0.55
+                self.ball_dy *= 0.45
                 self.stats["home_saves"] += 1
-                self.say("Brilliant save by the home goalkeeper!")
-                if self.stats_callback:
-                    self.stats_callback(self.stats.copy())
+                self.say("Great save by the home keeper!")
                 return True
 
-        # ball near right goal
         if self.ball_x > 820 and 180 < self.ball_y < 320 and right_gk:
             self.goalkeeper_dive(right_gk, "right")
             if random.random() < 0.65:
-                self.ball_dx = -abs(self.ball_dx) * 0.6
-                self.ball_dy *= 0.4
+                self.ball_dx = -abs(self.ball_dx) * 0.55
+                self.ball_dy *= 0.45
                 self.stats["away_saves"] += 1
-                self.say("Outstanding stop by the away goalkeeper!")
-                if self.stats_callback:
-                    self.stats_callback(self.stats.copy())
+                self.say("Brilliant save by the away keeper!")
                 return True
 
         return False
 
     def check_goal(self):
-        # left goal scored by away
         if self.ball_x <= 3 and 210 <= self.ball_y <= 290:
             self.away_score += 1
             if self.goal_callback:
                 self.goal_callback("away")
-            self.say("GOAL for the away side!")
             self.reset_after_goal()
 
-        # right goal scored by home
         if self.ball_x >= 897 and 210 <= self.ball_y <= 290:
             self.home_score += 1
             if self.goal_callback:
                 self.goal_callback("home")
-            self.say("GOAL for the home side!")
             self.reset_after_goal()
 
     def reset_after_goal(self):
@@ -444,8 +414,6 @@ class AnimationEngine:
         self.ball_dy = 0.0
         self.canvas.coords(self.ball, 445, 245, 455, 255)
 
-    # ------------------------------------------------
-    # MAIN LOOP
     # ------------------------------------------------
 
     def animate(self):
@@ -472,3 +440,31 @@ class AnimationEngine:
             print("Animation error:", e)
 
         self.canvas.after(self.frame_ms, self.animate)
+
+    def reset_match(self):
+        self.running = False
+        self.home_score = 0
+        self.away_score = 0
+        self.home_pos_ticks = 1
+        self.away_pos_ticks = 1
+        self.stats = {
+            "home_shots": 0,
+            "away_shots": 0,
+            "home_on_target": 0,
+            "away_on_target": 0,
+            "home_passes": 0,
+            "away_passes": 0,
+            "home_saves": 0,
+            "away_saves": 0
+        }
+        self.ball_x = 450.0
+        self.ball_y = 250.0
+        self.ball_dx = 0.0
+        self.ball_dy = 0.0
+        self.tick_count = 0
+
+        self.draw_pitch()
+        self.create_players()
+        self.create_ball()
+        self.push_possession()
+        self.push_stats()

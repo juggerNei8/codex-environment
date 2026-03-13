@@ -1,6 +1,6 @@
 import os
 import csv
-import json
+from datetime import datetime, timedelta
 
 try:
     import requests
@@ -10,137 +10,200 @@ except Exception:
 
 
 class LiveDataHub:
+    """
+    Refreshes local CSV files from live APIs.
+    Safe behavior:
+    - if requests is missing, no crash
+    - if API keys are missing, no crash
+    - if internet fails, no crash
+    """
+
     def __init__(self):
-        self.football_data_key = os.getenv("FOOTBALL_DATA_API_KEY", "").strip()
+        self.football_api_key = os.getenv("FOOTBALL_DATA_API_KEY", "").strip()
         self.news_api_key = os.getenv("NEWSAPI_KEY", "").strip()
 
-    def refresh_all(self, database_dir):
+    # ------------------------------------------------
+
+    def refresh_all(self, database_dir, competition_code="PL"):
         os.makedirs(database_dir, exist_ok=True)
 
-        updated = False
-        notes = []
+        result = {
+            "updated": False,
+            "notes": []
+        }
 
-        if REQUESTS_AVAILABLE and self.football_data_key:
-            try:
-                self.refresh_teams(database_dir)
-                self.refresh_fixtures(database_dir)
-                self.refresh_standings(database_dir)
-                updated = True
-                notes.append("football-data updated")
-            except Exception as e:
-                notes.append(f"football-data failed: {e}")
+        if not REQUESTS_AVAILABLE:
+            result["notes"].append("requests not installed")
+            return result
+
+        if not self.football_api_key:
+            result["notes"].append("FOOTBALL_DATA_API_KEY not set")
         else:
-            notes.append("football-data skipped")
-
-        if REQUESTS_AVAILABLE and self.news_api_key:
             try:
-                self.refresh_news(database_dir)
-                updated = True
-                notes.append("news updated")
+                self.refresh_teams(database_dir, competition_code)
+                self.refresh_fixtures(database_dir, competition_code)
+                self.refresh_league_table(database_dir, competition_code)
+                result["updated"] = True
+                result["notes"].append("football data updated")
             except Exception as e:
-                notes.append(f"news failed: {e}")
+                result["notes"].append(f"football update failed: {e}")
+
+        if self.news_api_key:
+            try:
+                self.refresh_club_news(database_dir)
+                result["updated"] = True
+                result["notes"].append("club news updated")
+            except Exception as e:
+                result["notes"].append(f"news update failed: {e}")
         else:
-            notes.append("news skipped")
+            result["notes"].append("NEWSAPI_KEY not set")
 
-        return {"updated": updated, "notes": notes}
+        return result
 
-    def headers(self):
-        return {"X-Auth-Token": self.football_data_key}
+    # ------------------------------------------------
 
-    def refresh_teams(self, database_dir):
-        # Example competition: Premier League = PL
-        url = "https://api.football-data.org/v4/competitions/PL/teams"
-        r = requests.get(url, headers=self.headers(), timeout=20)
+    def football_headers(self):
+        return {"X-Auth-Token": self.football_api_key}
+
+    # ------------------------------------------------
+    # TEAMS
+    # ------------------------------------------------
+
+    def refresh_teams(self, database_dir, competition_code):
+        url = f"https://api.football-data.org/v4/competitions/{competition_code}/teams"
+        r = requests.get(url, headers=self.football_headers(), timeout=25)
         r.raise_for_status()
         data = r.json()
 
         rows = []
-        for t in data.get("teams", []):
+        for team in data.get("teams", []):
             rows.append({
-                "team": t.get("name", ""),
-                "league": "Premier League",
-                "country": (t.get("area") or {}).get("name", ""),
-                "strength": 80
+                "team": team.get("name", ""),
+                "league": (data.get("competition") or {}).get("name", ""),
+                "country": (team.get("area") or {}).get("name", ""),
+                "strength": 80,
+                "founded": team.get("founded", ""),
+                "stadium": team.get("venue", ""),
+                "shortName": team.get("shortName", "")
             })
 
-        if rows:
-            self.write_csv(os.path.join(database_dir, "teams.csv"), rows)
+        self.write_csv(os.path.join(database_dir, "teams.csv"), rows)
 
-    def refresh_fixtures(self, database_dir):
-        url = "https://api.football-data.org/v4/competitions/PL/matches"
-        r = requests.get(url, headers=self.headers(), timeout=20)
+    # ------------------------------------------------
+    # FIXTURES
+    # ------------------------------------------------
+
+    def refresh_fixtures(self, database_dir, competition_code):
+        date_from = datetime.utcnow().date().isoformat()
+        date_to = (datetime.utcnow().date() + timedelta(days=21)).isoformat()
+
+        url = (
+            f"https://api.football-data.org/v4/competitions/{competition_code}/matches"
+            f"?dateFrom={date_from}&dateTo={date_to}"
+        )
+
+        r = requests.get(url, headers=self.football_headers(), timeout=25)
         r.raise_for_status()
         data = r.json()
 
         rows = []
-        for m in data.get("matches", [])[:100]:
+        for match in data.get("matches", []):
             rows.append({
-                "home": ((m.get("homeTeam") or {}).get("name", "")),
-                "away": ((m.get("awayTeam") or {}).get("name", "")),
-                "competition": ((m.get("competition") or {}).get("name", "")),
-                "utcDate": m.get("utcDate", ""),
-                "status": m.get("status", "")
+                "home": ((match.get("homeTeam") or {}).get("name", "")),
+                "away": ((match.get("awayTeam") or {}).get("name", "")),
+                "competition": ((match.get("competition") or {}).get("name", "")),
+                "utcDate": match.get("utcDate", ""),
+                "status": match.get("status", "")
             })
 
-        if rows:
-            self.write_csv(os.path.join(database_dir, "fixtures.csv"), rows)
+        self.write_csv(os.path.join(database_dir, "fixtures.csv"), rows)
 
-    def refresh_standings(self, database_dir):
-        url = "https://api.football-data.org/v4/competitions/PL/standings"
-        r = requests.get(url, headers=self.headers(), timeout=20)
+    # ------------------------------------------------
+    # LEAGUE TABLE
+    # ------------------------------------------------
+
+    def refresh_league_table(self, database_dir, competition_code):
+        url = f"https://api.football-data.org/v4/competitions/{competition_code}/standings"
+        r = requests.get(url, headers=self.football_headers(), timeout=25)
         r.raise_for_status()
         data = r.json()
 
-        rows = []
         standings = data.get("standings", [])
-        if standings:
-            table = standings[0].get("table", [])
-            for row in table:
-                team = row.get("team", {})
-                rows.append({
-                    "team": team.get("name", ""),
-                    "played": row.get("playedGames", 0),
-                    "wins": row.get("won", 0),
-                    "draws": row.get("draw", 0),
-                    "losses": row.get("lost", 0),
-                    "gd": row.get("goalDifference", 0),
-                    "points": row.get("points", 0)
-                })
+        table = standings[0].get("table", []) if standings else []
 
-        if rows:
-            self.write_csv(os.path.join(database_dir, "league_table.csv"), rows)
+        rows = []
+        for row in table:
+            team = row.get("team", {})
+            rows.append({
+                "team": team.get("name", ""),
+                "played": row.get("playedGames", 0),
+                "wins": row.get("won", 0),
+                "draws": row.get("draw", 0),
+                "losses": row.get("lost", 0),
+                "gd": row.get("goalDifference", 0),
+                "points": row.get("points", 0)
+            })
 
-    def refresh_news(self, database_dir):
+        self.write_csv(os.path.join(database_dir, "league_table.csv"), rows)
+
+    # ------------------------------------------------
+    # CLUB NEWS
+    # ------------------------------------------------
+
+    def refresh_club_news(self, database_dir):
         url = "https://newsapi.org/v2/everything"
         params = {
-            "q": "football OR soccer transfer injury match",
+            "q": "football OR soccer injuries transfers standings match preview",
             "language": "en",
             "sortBy": "publishedAt",
             "pageSize": 20,
             "apiKey": self.news_api_key
         }
-        r = requests.get(url, params=params, timeout=20)
+
+        r = requests.get(url, params=params, timeout=25)
         r.raise_for_status()
         data = r.json()
 
         rows = []
-        for art in data.get("articles", []):
-            title = art.get("title", "")
-            desc = art.get("description", "") or ""
+        for article in data.get("articles", []):
             rows.append({
                 "team": "General",
-                "title": title,
-                "summary": desc[:220]
+                "title": article.get("title", ""),
+                "summary": (article.get("description") or "")[:220]
             })
 
-        if rows:
-            self.write_csv(os.path.join(database_dir, "club_news.csv"), rows)
+        self.write_csv(os.path.join(database_dir, "club_news.csv"), rows)
+
+    # ------------------------------------------------
+    # PLAYERS
+    # ------------------------------------------------
+
+    def ensure_players_exists(self, database_dir):
+        """
+        football-data public docs are great for teams/matches/standings.
+        For players, keep a local CSV unless you add a separate source.
+        This prevents crashes.
+        """
+        path = os.path.join(database_dir, "players.csv")
+        if os.path.exists(path):
+            return
+
+        rows = [
+            {"player": "Bukayo Saka", "team": "Arsenal", "position": "RW", "rating": 87},
+            {"player": "Martin Odegaard", "team": "Arsenal", "position": "CAM", "rating": 88},
+            {"player": "Cole Palmer", "team": "Chelsea", "position": "CAM", "rating": 86},
+            {"player": "Jude Bellingham", "team": "Real Madrid", "position": "CM", "rating": 90},
+        ]
+        self.write_csv(path, rows)
+
+    # ------------------------------------------------
 
     def write_csv(self, path, rows):
         if not rows:
             return
 
         fieldnames = list(rows[0].keys())
+
         with open(path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()

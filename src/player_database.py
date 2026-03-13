@@ -1,30 +1,100 @@
+import os
+import pandas as pd
 import random
 
 
 class PlayerDatabase:
-
     def __init__(self):
+        self.players = pd.DataFrame()
 
-        self.players = []
+    # ------------------------------------------------
 
-        self.generate_players()
+    def load_or_enrich(self, database_dir):
+        teams_path = os.path.join(database_dir, "teams.csv")
+        players_path = os.path.join(database_dir, "players.csv")
 
-    def generate_players(self):
+        if os.path.exists(players_path) and os.path.getsize(players_path) > 0:
+            try:
+                self.players = pd.read_csv(players_path)
+            except Exception:
+                self.players = pd.DataFrame()
 
-        roles = [
-            "ST","LW","RW",
-            "CAM","CM","CDM",
-            "CB","LB","RB",
-            "GK"
+        if self.players.empty:
+            self.players = self.generate_from_teams(teams_path)
+            self.players.to_csv(players_path, index=False)
+            return self.players
+
+        # enrich sparse database
+        self.players = self.enrich_existing(self.players, teams_path)
+        self.players.to_csv(players_path, index=False)
+        return self.players
+
+    # ------------------------------------------------
+
+    def generate_from_teams(self, teams_path):
+        if not os.path.exists(teams_path):
+            return pd.DataFrame(columns=["player", "team", "position", "rating", "value", "stamina"])
+
+        teams_df = pd.read_csv(teams_path)
+        if "team" not in teams_df.columns:
+            first_col = teams_df.columns[0]
+            teams_df = teams_df.rename(columns={first_col: "team"})
+
+        formation_positions = [
+            "GK",
+            "LB", "CB", "CB", "RB",
+            "CM", "CM", "CAM",
+            "LW", "ST", "RW",
+            "CDM", "CM", "CB", "ST", "RW"
         ]
 
-        for i in range(20000):
+        rows = []
+        for team in teams_df["team"].dropna().astype(str).tolist():
+            base_strength = 75
+            if "strength" in teams_df.columns:
+                value = teams_df.loc[teams_df["team"] == team, "strength"]
+                if not value.empty:
+                    base_strength = int(value.iloc[0])
 
-            player = {
-                "name": f"Player_{i}",
-                "role": random.choice(roles),
-                "rating": random.randint(60, 95),
-                "value": random.randint(1, 120)
-            }
+            for i, pos in enumerate(formation_positions, start=1):
+                rating = max(58, min(95, int(random.gauss(base_strength, 6))))
+                value = int(max(1, rating - 50) * random.uniform(0.6, 2.2))
+                rows.append({
+                    "player": f"{team.replace(' ', '_')}_{pos}_{i}",
+                    "team": team,
+                    "position": pos,
+                    "rating": rating,
+                    "value": value,
+                    "stamina": 100
+                })
 
-            self.players.append(player)
+        return pd.DataFrame(rows)
+
+    # ------------------------------------------------
+
+    def enrich_existing(self, df, teams_path):
+        needed_cols = ["player", "team", "position", "rating", "value", "stamina"]
+        for col in needed_cols:
+            if col not in df.columns:
+                if col == "value":
+                    df[col] = 10
+                elif col == "stamina":
+                    df[col] = 100
+                else:
+                    df[col] = ""
+
+        # top up teams with too few players
+        counts = df.groupby("team").size().to_dict()
+        generated = self.generate_from_teams(teams_path)
+
+        add_rows = []
+        for team, team_df in generated.groupby("team"):
+            current = counts.get(team, 0)
+            if current < 14:
+                needed = 16 - current
+                add_rows.extend(team_df.head(max(0, needed)).to_dict("records"))
+
+        if add_rows:
+            df = pd.concat([df, pd.DataFrame(add_rows)], ignore_index=True)
+
+        return df
