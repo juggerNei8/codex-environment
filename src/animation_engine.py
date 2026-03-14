@@ -1,5 +1,7 @@
-import random
 import math
+import random
+
+from asset_manager import AssetManager
 
 
 class AnimationEngine:
@@ -19,19 +21,31 @@ class AnimationEngine:
         self.stats_callback = stats_callback
         self.timeline_callback = timeline_callback
 
+        self.assets = AssetManager()
+
         self.pitch_w = 900
         self.pitch_h = 500
         self.running = False
-        self.frame_ms = 70
+
+        # smoother animation target; actual fps depends on machine/Tkinter
+        self.frame_ms = 16
 
         self.home_team_name = "HOME"
         self.away_team_name = "AWAY"
         self.home_formation = "4-3-3"
         self.away_formation = "4-2-3-1"
 
+        self.home_tactic = {"press": 0.58, "pass_speed": 1.0, "shot_bias": 0.11, "shape": "balanced"}
+        self.away_tactic = {"press": 0.58, "pass_speed": 1.0, "shot_bias": 0.11, "shape": "balanced"}
+
         self.players = []
         self.ball = None
+        self.ball_img = None
+        self.pitch_img = None
+        self.pitch_bg = None
+
         self.line_items = []
+        self.badge_items = []
 
         self.ball_x = 450.0
         self.ball_y = 250.0
@@ -54,15 +68,13 @@ class AnimationEngine:
             "away_saves": 0
         }
 
-        self.home_tactic = {"press": 0.58, "pass_speed": 1.0, "shot_bias": 0.11, "shape": "balanced"}
-        self.away_tactic = {"press": 0.58, "pass_speed": 1.0, "shot_bias": 0.11, "shape": "balanced"}
-
         self.tick_count = 0
 
         self.draw_pitch()
         self.create_players()
         self.create_ball()
         self.push_stats()
+        self.push_possession()
 
     # ------------------------------------------------
 
@@ -74,18 +86,18 @@ class AnimationEngine:
         if self.timeline_callback:
             self.timeline_callback(minute, kind, text)
 
+    def set_tactics(self, home_tactic, away_tactic):
+        if home_tactic:
+            self.home_tactic = home_tactic
+        if away_tactic:
+            self.away_tactic = away_tactic
+
     def configure_match(self, home_team, away_team, home_formation, away_formation):
         self.home_team_name = home_team or "HOME"
         self.away_team_name = away_team or "AWAY"
         self.home_formation = home_formation or "4-3-3"
         self.away_formation = away_formation or "4-2-3-1"
         self.reset_match()
-
-    def set_tactics(self, home_tactic, away_tactic):
-        if home_tactic:
-            self.home_tactic = home_tactic
-        if away_tactic:
-            self.away_tactic = away_tactic
 
     def get_average_stamina(self, team):
         group = [p for p in self.players if p["team"] == team]
@@ -100,8 +112,8 @@ class AnimationEngine:
         return home, away
 
     def push_possession(self):
-        home, away = self.get_possession_snapshot()
         if self.possession_callback:
+            home, away = self.get_possession_snapshot()
             self.possession_callback(home, away)
 
     def push_stats(self):
@@ -109,67 +121,84 @@ class AnimationEngine:
             self.stats_callback(self.stats.copy())
 
     # ------------------------------------------------
-    # PITCH
+    # PITCH / BADGES
     # ------------------------------------------------
 
     def draw_pitch(self):
         self.canvas.delete("all")
         self.line_items = []
+        self.badge_items = []
 
-        stripe = 60
-        for i in range(0, self.pitch_w, stripe):
-            color = "#2e7d32" if (i // stripe) % 2 == 0 else "#348f3a"
-            self.canvas.create_rectangle(i, 0, i + stripe, self.pitch_h, fill=color, outline="")
+        pitch_image = self.assets.load_pitch_image()
+        if pitch_image is not None:
+            self.pitch_img = pitch_image
+            self.pitch_bg = self.canvas.create_image(450, 250, image=self.pitch_img)
+        else:
+            stripe = 60
+            for i in range(0, self.pitch_w, stripe):
+                color = "#2e7d32" if (i // stripe) % 2 == 0 else "#348f3a"
+                self.canvas.create_rectangle(i, 0, i + stripe, self.pitch_h, fill=color, outline="")
 
         self.canvas.create_line(self.pitch_w / 2, 0, self.pitch_w / 2, self.pitch_h, fill="white", width=2)
         self.canvas.create_oval(390, 190, 510, 310, outline="white", width=2)
-
         self.canvas.create_rectangle(0, 140, 120, 360, outline="white", width=2)
         self.canvas.create_rectangle(780, 140, 900, 360, outline="white", width=2)
-
         self.canvas.create_rectangle(0, 190, 50, 310, outline="white", width=2)
         self.canvas.create_rectangle(850, 190, 900, 310, outline="white", width=2)
-
         self.canvas.create_rectangle(0, 210, 10, 290, fill="white", outline="white")
         self.canvas.create_rectangle(890, 210, 900, 290, fill="white", outline="white")
 
-        # pitch badges / fallback
-        self.canvas.create_text(70, 24, text=self.home_team_name[:10], fill="white", font=("Arial", 10, "bold"))
-        self.canvas.create_text(830, 24, text=self.away_team_name[:10], fill="white", font=("Arial", 10, "bold"))
+        self.badge_items.append(
+            self.canvas.create_text(75, 24, text=self.home_team_name[:14], fill="white", font=("Arial", 11, "bold"))
+        )
+        self.badge_items.append(
+            self.canvas.create_text(825, 24, text=self.away_team_name[:14], fill="white", font=("Arial", 11, "bold"))
+        )
 
+    # ------------------------------------------------
+    # FORMATIONS
     # ------------------------------------------------
 
     def get_positions(self, formation, side):
-        if side == "home":
-            if formation == "4-2-3-1":
-                return [
-                    ("GK", 70, 250),
-                    ("LB", 180, 90), ("CB", 180, 195), ("CB", 180, 305), ("RB", 180, 410),
-                    ("CDM", 300, 180), ("CDM", 300, 320),
-                    ("LW", 430, 110), ("CAM", 430, 250), ("RW", 430, 390),
-                    ("ST", 560, 250)
-                ]
-            return [
+        formations = {
+            "4-3-3": [
                 ("GK", 70, 250),
                 ("LB", 180, 90), ("CB", 180, 195), ("CB", 180, 305), ("RB", 180, 410),
                 ("CM", 320, 140), ("CM", 320, 250), ("CM", 320, 360),
-                ("LW", 500, 120), ("ST", 560, 250), ("RW", 500, 380)
-            ]
+                ("LW", 500, 120), ("ST", 560, 250), ("RW", 500, 380),
+            ],
+            "4-2-3-1": [
+                ("GK", 70, 250),
+                ("LB", 180, 90), ("CB", 180, 195), ("CB", 180, 305), ("RB", 180, 410),
+                ("CDM", 300, 180), ("CDM", 300, 320),
+                ("LW", 430, 110), ("CAM", 430, 250), ("RW", 430, 390),
+                ("ST", 560, 250),
+            ],
+            "3-5-2": [
+                ("GK", 70, 250),
+                ("CB", 180, 130), ("CB", 180, 250), ("CB", 180, 370),
+                ("LM", 290, 90), ("CM", 320, 180), ("CM", 320, 250), ("CM", 320, 320), ("RM", 290, 410),
+                ("ST", 520, 200), ("ST", 520, 300),
+            ],
+            "4-4-2": [
+                ("GK", 70, 250),
+                ("LB", 180, 90), ("CB", 180, 195), ("CB", 180, 305), ("RB", 180, 410),
+                ("LM", 330, 90), ("CM", 320, 210), ("CM", 320, 290), ("RM", 330, 410),
+                ("ST", 520, 200), ("ST", 520, 300),
+            ],
+        }
 
-        if formation == "4-2-3-1":
-            return [
-                ("GK", 830, 250),
-                ("LB", 720, 90), ("CB", 720, 195), ("CB", 720, 305), ("RB", 720, 410),
-                ("CDM", 600, 180), ("CDM", 600, 320),
-                ("LW", 470, 110), ("CAM", 470, 250), ("RW", 470, 390),
-                ("ST", 340, 250)
-            ]
-        return [
-            ("GK", 830, 250),
-            ("LB", 720, 90), ("CB", 720, 195), ("CB", 720, 305), ("RB", 720, 410),
-            ("CM", 580, 140), ("CM", 580, 250), ("CM", 580, 360),
-            ("LW", 400, 120), ("ST", 340, 250), ("RW", 400, 380)
-        ]
+        base = formations.get(formation, formations["4-3-3"])
+
+        if side == "home":
+            return base
+
+        mirrored = []
+        for role, x, y in base:
+            mirrored.append((role, self.pitch_w - x, y))
+        return mirrored
+
+    # ------------------------------------------------
 
     def create_players(self):
         self.players = []
@@ -178,8 +207,10 @@ class AnimationEngine:
         away_positions = self.get_positions(self.away_formation, "away")
 
         for idx, (role, x, y) in enumerate(home_positions, start=1):
-            obj = self.canvas.create_oval(x, y, x + 16, y + 16, fill="#ef4444", outline="")
-            label = self.canvas.create_text(x + 8, y - 10, text=role, fill="white", font=("Arial", 8, "bold"))
+            name = f"{self.home_team_name[:3].upper()}-{idx}"
+            obj = self.canvas.create_oval(x, y, x + 18, y + 18, fill="#ef4444", outline="")
+            label = self.canvas.create_text(x + 9, y - 12, text=name, fill="white", font=("Arial", 7, "bold"))
+            role_label = self.canvas.create_text(x + 9, y - 25, text=role, fill="#e2e8f0", font=("Arial", 7))
             self.players.append({
                 "team": "home",
                 "role": role,
@@ -189,13 +220,16 @@ class AnimationEngine:
                 "home_y": float(y),
                 "obj": obj,
                 "label": label,
+                "role_label": role_label,
                 "stamina": 100.0,
-                "name": f"H{idx}"
+                "name": name
             })
 
         for idx, (role, x, y) in enumerate(away_positions, start=1):
-            obj = self.canvas.create_oval(x, y, x + 16, y + 16, fill="#3b82f6", outline="")
-            label = self.canvas.create_text(x + 8, y - 10, text=role, fill="white", font=("Arial", 8, "bold"))
+            name = f"{self.away_team_name[:3].upper()}-{idx}"
+            obj = self.canvas.create_oval(x, y, x + 18, y + 18, fill="#3b82f6", outline="")
+            label = self.canvas.create_text(x + 9, y - 12, text=name, fill="white", font=("Arial", 7, "bold"))
+            role_label = self.canvas.create_text(x + 9, y - 25, text=role, fill="#e2e8f0", font=("Arial", 7))
             self.players.append({
                 "team": "away",
                 "role": role,
@@ -205,17 +239,26 @@ class AnimationEngine:
                 "home_y": float(y),
                 "obj": obj,
                 "label": label,
+                "role_label": role_label,
                 "stamina": 100.0,
-                "name": f"A{idx}"
+                "name": name
             })
 
     def create_ball(self):
-        self.ball = self.canvas.create_oval(self.ball_x, self.ball_y, self.ball_x + 10, self.ball_y + 10, fill="white", outline="black")
+        ball_img = self.assets.load_ball_image()
+        if ball_img is not None:
+            self.ball_img = ball_img
+            self.ball = self.canvas.create_image(self.ball_x, self.ball_y, image=self.ball_img)
+        else:
+            self.ball = self.canvas.create_oval(
+                self.ball_x, self.ball_y, self.ball_x + 10, self.ball_y + 10,
+                fill="white", outline="black"
+            )
 
     # ------------------------------------------------
 
     def center_of(self, player):
-        return player["x"] + 8, player["y"] + 8
+        return player["x"] + 9, player["y"] + 9
 
     def find_nearest_player(self):
         best = None
@@ -238,7 +281,23 @@ class AnimationEngine:
         return None
 
     # ------------------------------------------------
-    # MOVEMENT
+    # TRACKER LINES
+    # ------------------------------------------------
+
+    def clear_tracker_lines(self):
+        for item in self.line_items:
+            try:
+                self.canvas.delete(item)
+            except Exception:
+                pass
+        self.line_items = []
+
+    def draw_tracker_line(self, x1, y1, x2, y2, color, width=3):
+        item = self.canvas.create_line(x1, y1, x2, y2, fill=color, width=width, dash=(6, 3))
+        self.line_items.append(item)
+
+    # ------------------------------------------------
+    # MOVEMENT / PASSING / SHOTS
     # ------------------------------------------------
 
     def move_players(self):
@@ -255,16 +314,16 @@ class AnimationEngine:
 
             tactic = self.home_tactic if p["team"] == "home" else self.away_tactic
 
-            if p["team"] == "home" and p["role"] in ("ST", "LW", "RW", "CAM") and tactic["shape"] == "attack":
-                target_x = min(800, target_x + 35)
+            if p["team"] == "home" and p["role"] in ("ST", "LW", "RW", "CAM", "LM", "RM") and tactic["shape"] == "attack":
+                target_x = min(820, target_x + 32)
 
-            if p["team"] == "away" and p["role"] in ("ST", "LW", "RW", "CAM") and tactic["shape"] == "attack":
-                target_x = max(100, target_x - 35)
+            if p["team"] == "away" and p["role"] in ("ST", "LW", "RW", "CAM", "LM", "RM") and tactic["shape"] == "attack":
+                target_x = max(80, target_x - 32)
 
-            dx = (target_x - px) * 0.03
-            dy = (target_y - py) * 0.03
+            dx = (target_x - px) * 0.05
+            dy = (target_y - py) * 0.05
 
-            pace = max(0.45, p["stamina"] / 100.0)
+            pace = max(0.5, p["stamina"] / 100.0)
             dx *= pace
             dy *= pace
 
@@ -273,24 +332,9 @@ class AnimationEngine:
 
             self.canvas.move(p["obj"], dx, dy)
             self.canvas.move(p["label"], dx, dy)
+            self.canvas.move(p["role_label"], dx, dy)
 
-            p["stamina"] = max(35.0, p["stamina"] - 0.012)
-
-    # ------------------------------------------------
-    # PASSING / TRACKER LINES / SHOTS
-    # ------------------------------------------------
-
-    def clear_tracker_lines(self):
-        for item in self.line_items:
-            try:
-                self.canvas.delete(item)
-            except Exception:
-                pass
-        self.line_items = []
-
-    def draw_tracker_line(self, x1, y1, x2, y2, color):
-        item = self.canvas.create_line(x1, y1, x2, y2, fill=color, width=2, dash=(4, 2))
-        self.line_items.append(item)
+            p["stamina"] = max(35.0, p["stamina"] - 0.018)
 
     def kick_ball_toward(self, tx, ty, power):
         dx = tx - self.ball_x
@@ -307,17 +351,17 @@ class AnimationEngine:
         if team == "home":
             mates = sorted(mates, key=lambda p: p["x"], reverse=True)
             speed = self.home_tactic["pass_speed"]
-            color = "#ffb4b4"
+            color = "#ffd1d1"
         else:
             mates = sorted(mates, key=lambda p: p["x"])
             speed = self.away_tactic["pass_speed"]
-            color = "#b9d7ff"
+            color = "#cfe3ff"
 
-        target = random.choice(mates[:4] if len(mates) >= 4 else mates)
+        target = random.choice(mates[:5] if len(mates) >= 5 else mates)
         tx, ty = self.center_of(target)
 
-        self.draw_tracker_line(self.ball_x, self.ball_y, tx, ty, color)
-        self.kick_ball_toward(tx, ty, power=random.uniform(4.0, 6.4) * speed)
+        self.draw_tracker_line(self.ball_x, self.ball_y, tx, ty, color, width=3)
+        self.kick_ball_toward(tx, ty, power=random.uniform(5.0, 7.0) * speed)
 
         if team == "home":
             self.home_pos_ticks += 1
@@ -332,21 +376,20 @@ class AnimationEngine:
             goal_y = random.randint(220, 280)
             self.stats["home_shots"] += 1
             self.stats["home_on_target"] += 1
-            color = "#ffcccb"
+            color = "#ffb3b3"
         else:
             goal_x = 5
             goal_y = random.randint(220, 280)
             self.stats["away_shots"] += 1
             self.stats["away_on_target"] += 1
-            color = "#cbe1ff"
+            color = "#bcd9ff"
 
-        self.draw_tracker_line(self.ball_x, self.ball_y, goal_x, goal_y, color)
-        self.kick_ball_toward(goal_x, goal_y, power=random.uniform(8.0, 11.5))
+        self.draw_tracker_line(self.ball_x, self.ball_y, goal_x, goal_y, color, width=4)
+        self.kick_ball_toward(goal_x, goal_y, power=random.uniform(9.0, 12.5))
         self.say("Shot taken!")
 
     def maybe_action(self):
         nearest, dist = self.find_nearest_player()
-
         if nearest is None or dist > 36:
             return
 
@@ -364,26 +407,30 @@ class AnimationEngine:
 
         shot_bias = tactic["shot_bias"]
 
-        if role in ("ST", "LW", "RW", "CAM") and close_to_goal and random.random() < shot_bias:
+        if role in ("ST", "LW", "RW", "CAM", "LM", "RM") and close_to_goal and random.random() < shot_bias:
             self.attempt_shot(team)
         else:
             self.pass_ball(team)
 
-        # occasional timeline events
-        minute = min(99, max(1, self.tick_count // 14))
+        minute = min(99, max(1, self.tick_count // 25))
+        if random.random() < 0.05:
+            self.timeline(minute, "card", "Yellow card shown.")
         if random.random() < 0.03:
-            self.timeline(minute, "card", "Yellow card shown for a late challenge.")
-        if random.random() < 0.02:
-            self.timeline(minute, "substitution", "Tactical substitution made.")
+            self.timeline(minute, "substitution", "Substitution made.")
+        if random.random() < 0.04:
+            self.timeline(minute, "manual", "Possession battle intensifies.")
 
     def move_ball(self):
         self.ball_x += self.ball_dx
         self.ball_y += self.ball_dy
 
-        self.ball_dx *= 0.965
-        self.ball_dy *= 0.965
+        self.ball_dx *= 0.972
+        self.ball_dy *= 0.972
 
-        self.canvas.coords(self.ball, self.ball_x, self.ball_y, self.ball_x + 10, self.ball_y + 10)
+        if self.ball_img is not None:
+            self.canvas.coords(self.ball, self.ball_x, self.ball_y)
+        else:
+            self.canvas.coords(self.ball, self.ball_x, self.ball_y, self.ball_x + 10, self.ball_y + 10)
 
     # ------------------------------------------------
     # GK / GOALS
@@ -393,6 +440,7 @@ class AnimationEngine:
         dive = 16 if direction == "right" else -16
         self.canvas.move(keeper["obj"], dive, 0)
         self.canvas.move(keeper["label"], dive, 0)
+        self.canvas.move(keeper["role_label"], dive, 0)
         keeper["x"] += dive
 
     def maybe_goalkeeper_save(self):
@@ -437,7 +485,10 @@ class AnimationEngine:
         self.ball_y = 250
         self.ball_dx = 0.0
         self.ball_dy = 0.0
-        self.canvas.coords(self.ball, 445, 245, 455, 255)
+        if self.ball_img is not None:
+            self.canvas.coords(self.ball, self.ball_x, self.ball_y)
+        else:
+            self.canvas.coords(self.ball, 445, 245, 455, 255)
 
     # ------------------------------------------------
 
@@ -448,19 +499,19 @@ class AnimationEngine:
         try:
             self.tick_count += 1
 
-            if self.tick_count % 10 == 0:
+            if self.tick_count % 30 == 0:
                 self.clear_tracker_lines()
 
             self.move_players()
 
-            if random.random() < 0.18:
+            if random.random() < 0.20:
                 self.maybe_action()
 
             self.move_ball()
             self.maybe_goalkeeper_save()
             self.check_goal()
 
-            if self.tick_count % 12 == 0:
+            if self.tick_count % 18 == 0:
                 self.push_possession()
                 self.push_stats()
 

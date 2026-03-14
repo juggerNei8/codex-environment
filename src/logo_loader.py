@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import tkinter as tk
 
 
@@ -6,42 +7,38 @@ class LogoLoader:
     def __init__(self):
         self.cache = {}
 
-    def base_dir(self):
-        here = os.path.dirname(os.path.abspath(__file__))
-        return os.path.normpath(os.path.join(here, "..", "assets", "logos"))
+    def _candidate_paths(self, team_name: str):
+        safe = "".join(c.lower() if c.isalnum() else "_" for c in team_name).strip("_")
 
-    def safe_name(self, name):
-        return (
-            name.lower()
-            .replace(" ", "_")
-            .replace("/", "_")
-            .replace("\\", "_")
-            .replace("-", "_")
-        )
+        candidates = []
 
-    def find_logo_path(self, team_name):
-        base = self.base_dir()
-        if not os.path.exists(base):
-            return None
+        # backend cache logos
+        cache_dir = os.getenv("CACHE_DIR", "")
+        if cache_dir:
+            candidates.append(Path(cache_dir) / "assets" / "logos" / f"{safe}.png")
 
-        filename = self.safe_name(team_name) + ".png"
-        path = os.path.join(base, filename)
-        if os.path.exists(path):
-            return path
+        # local project assets fallback
+        project_root = Path(__file__).resolve().parent.parent
+        candidates.append(project_root / "assets" / "logos" / f"{safe}.png")
+
+        return candidates
+
+    def load(self, team: str, small: bool = False):
+        key = (team, small)
+        if key in self.cache:
+            return self.cache[key]
+
+        for path in self._candidate_paths(team):
+            if path.exists():
+                try:
+                    img = tk.PhotoImage(file=str(path))
+                    if small:
+                        img = img.subsample(max(1, img.width() // 36), max(1, img.height() // 36))
+                    else:
+                        img = img.subsample(max(1, img.width() // 64), max(1, img.height() // 64))
+                    self.cache[key] = img
+                    return img
+                except Exception:
+                    continue
 
         return None
-
-    def load(self, team_name):
-        if team_name in self.cache:
-            return self.cache[team_name]
-
-        path = self.find_logo_path(team_name)
-        if not path:
-            return None
-
-        try:
-            img = tk.PhotoImage(file=path)
-            self.cache[team_name] = img
-            return img
-        except Exception:
-            return None

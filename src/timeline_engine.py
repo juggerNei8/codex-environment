@@ -7,10 +7,13 @@ class TimelineEngine:
 
     def add_event(self, minute, kind, text):
         self.events.append({
-            "minute": minute,
-            "kind": kind,
-            "text": text
+            "minute": int(minute),
+            "kind": str(kind),
+            "text": str(text)
         })
 
-    def as_lines(self):
-        return [f"{e['minute']:02d}' [{e['kind'].upper()}] {e['text']}" for e in self.events]
+    def as_lines(self, limit=None):
+        lines = [f"{e['minute']:02d}' [{e['kind'].upper()}] {e['text']}" for e in self.events]
+        if limit is not None:
+            return lines[-limit:]
+        return lines

@@ -1,52 +1,87 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-import pandas as pd
 import os
+
+os.environ.setdefault("SIMULATOR_TOKEN", "change_me_simulator_token")
+os.environ.setdefault("BACKEND_BASE_URL", "http://127.0.0.1:8000")
+os.environ.setdefault("ENABLE_HTTP_FALLBACK", "true")
 
 from animation_engine import AnimationEngine
 from audio_engine import AudioEngine
 from commentary_engine import CommentaryEngine
-from live_data_hub import LiveDataHub
-from player_database import PlayerDatabase
-from prediction_engine import PredictionEngine
-from manager_ai import ManagerAI
 from transfer_market import TransferMarket
 from logo_loader import LogoLoader
 from timeline_engine import TimelineEngine
+from backend_launcher import BackendLauncher
+from prediction_engine import PredictionEngine
+
+from sim_integration.backend_client import SimulatorDataClient
+from sim_integration.tk_helpers import run_in_background
+
+
+APP_VERSION = "v1.0.6"
+APP_COPYRIGHT = "© 2026 JuggerNei8 Football Simulator"
+
+LEAGUE_OPTIONS = {
+    "Premier League": "PL",
+    "La Liga": "PD",
+    "Bundesliga": "BL1",
+    "Serie A": "SA",
+    "Ligue 1": "FL1",
+    "Champions League": "CL",
+    "Europa League": "EL",
+    "Conference League": "UCL",
+    "Eredivisie": "DED",
+    "Primeira Liga": "PPL",
+}
 
 
 class FootballSimulator:
     def __init__(self, root):
         self.root = root
         self.root.title("Football Match Simulator")
-        self.root.geometry("1540x940")
+        self.root.geometry("1280x720")
+        self.root.minsize(1100, 650)
+        self.root.resizable(True, True)
         self.root.configure(bg="#0f172a")
 
         self.dark_mode = True
-        self.match_duration_seconds = 8
+        self.match_duration_seconds = 60
         self.live_refresh_ms = 10 * 60 * 1000
+        self.current_competition = os.getenv("DEFAULT_COMPETITION", "PL")
 
         self.home_score = 0
         self.away_score = 0
         self.match_time = 0
         self.match_finished = False
 
+        self.audio_enabled = True
+        self.show_tracker_lines = True
+        self.show_player_labels = True
+        self.fast_graphics = False
+
         self.audio = AudioEngine()
         self.commentary_engine = CommentaryEngine()
-        self.live_data = LiveDataHub()
-        self.player_db = PlayerDatabase()
-        self.prediction_engine = PredictionEngine()
-        self.manager_ai = ManagerAI()
         self.transfer_market = TransferMarket()
         self.logo_loader = LogoLoader()
         self.timeline_engine = TimelineEngine()
+        self.backend_launcher = BackendLauncher()
+        self.prediction_engine = PredictionEngine()
+        self.data_client = SimulatorDataClient()
 
         self.team_list = []
-        self.teams_df = pd.DataFrame()
-        self.players_df = pd.DataFrame()
-        self.team_form_df = pd.DataFrame()
+        self.teams = []
+        self.fixtures = []
+        self.standings = []
+        self.news_items = []
+        self.logos = []
+        self.backend_usage = {}
+        self.export_status = {}
+        self.live_games = {}
+        self.odds_markets = {}
+        self.bet365_prematch = {}
+        self.tournament_odds = {}
 
-        self.load_database()
         self.build_ui()
 
         self.engine = AnimationEngine(
@@ -55,89 +90,157 @@ class FootballSimulator:
             goal_callback=self.goal_scored,
             possession_callback=self.update_possession,
             stats_callback=self.update_stats,
-            timeline_callback=self.add_timeline_event
+            timeline_callback=self.add_timeline_event,
         )
 
-        self.refresh_live_data()
+        self.engine.frame_ms = 16
+
+        self.startup_backend_then_load()
         self.update_clock()
         self.update_manager_tactics_loop()
         self.schedule_live_refresh_loop()
 
     # ------------------------------------------------
+    # STARTUP / BACKEND
+    # ------------------------------------------------
 
-    def project_path(self, *parts):
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        return os.path.normpath(os.path.join(base_dir, "..", *parts))
+    def startup_backend_then_load(self):
+        self.status_label.config(text="Checking backend...")
+        self.add_commentary("Checking backend status...")
+        run_in_background(
+            self._ensure_backend_running,
+            self._on_backend_ready,
+            self._on_backend_error,
+        )
 
-    def ensure_database_files(self):
-        db_dir = self.project_path("database")
-        os.makedirs(db_dir, exist_ok=True)
+    def _ensure_backend_running(self):
+        if self.backend_launcher.is_backend_running():
+            return {"started": False, "ready": True}
+        started = self.backend_launcher.start_backend()
+        return {"started": True, "ready": started}
 
-        defaults = {
-            "teams.csv": "team,league,country,strength\nArsenal,Premier League,England,85\nChelsea,Premier League,England,83\nBarcelona,La Liga,Spain,88\nReal Madrid,La Liga,Spain,90\n",
-            "players.csv": "player,team,position,rating\nBukayo Saka,Arsenal,RW,87\nMartin Odegaard,Arsenal,CAM,88\nCole Palmer,Chelsea,CAM,86\nJude Bellingham,Real Madrid,CM,90\n",
-            "fixtures.csv": "home,away,competition,utcDate,status\nArsenal,Chelsea,League,,SCHEDULED\nBarcelona,Real Madrid,League,,SCHEDULED\n",
-            "league_table.csv": "team,played,wins,draws,losses,gd,points\nArsenal,0,0,0,0,0,0\nChelsea,0,0,0,0,0,0\nBarcelona,0,0,0,0,0,0\nReal Madrid,0,0,0,0,0,0\n",
-            "club_news.csv": "team,title,summary\nGeneral,Startup,Simulator started with local data.\n",
-            "team_form.csv": "team,form_last5,injuries_count,cards_pressure,morale\nArsenal,0.62,0,0.15,0.68\nChelsea,0.58,1,0.18,0.64\nBarcelona,0.66,0,0.14,0.72\nReal Madrid,0.69,0,0.12,0.75\n",
+    def _on_backend_ready(self, result):
+        if result and result.get("ready"):
+            if result.get("started"):
+                self.add_commentary("Backend started automatically.")
+                self.status_label.config(text="Backend started. Loading simulator data...")
+            else:
+                self.add_commentary("Backend already running.")
+                self.status_label.config(text="Backend online. Loading simulator data...")
+            self.load_initial_data()
+        else:
+            self.status_label.config(text="Backend did not start.")
+            self.add_commentary("Backend could not be started automatically. Check backend files and VPN.")
+
+    def _on_backend_error(self, error):
+        self.status_label.config(text=f"Backend startup error: {error}")
+        self.add_commentary("Backend startup failed.")
+
+    # ------------------------------------------------
+    # DATA
+    # ------------------------------------------------
+
+    def load_initial_data(self):
+        self.status_label.config(text=f"Loading backend/cache data for {self.current_competition}...")
+        self.add_commentary(f"Loading backend/cache data for {self.current_competition}...")
+        run_in_background(
+            self._fetch_all_data,
+            self._on_data_loaded,
+            self._on_data_error,
+        )
+
+    def _fetch_all_data(self):
+        comp = self.current_competition
+        return {
+            "teams": self.data_client.load_teams(comp),
+            "fixtures": self.data_client.load_fixtures(comp),
+            "standings": self.data_client.load_standings(comp),
+            "news": self.data_client.load_news(comp),
+            "logos": self.data_client.load_logos(comp),
+            "usage": self.data_client.load_usage(),
+            "export_status": self.data_client.load_export_status(),
+            "live_games": self.data_client.load_live_games(),
+            "odds_markets": self.data_client.load_odds_markets(),
+            "bet365_prematch": self.data_client.load_bet365_prematch(),
+            "tournament_odds": self.data_client.load_odds_tournaments("17"),
         }
 
-        for filename, content in defaults.items():
-            full = self.project_path("database", filename)
-            if not os.path.exists(full) or os.path.getsize(full) == 0:
-                with open(full, "w", encoding="utf-8") as f:
-                    f.write(content)
+    def _on_data_loaded(self, data):
+        if not data:
+            self.status_label.config(text="No data returned. Using fallback state.")
+            self.add_commentary("No backend/cache data returned.")
+            return
 
-    def load_database(self):
-        self.ensure_database_files()
+        self.teams = data.get("teams", []) or []
+        self.fixtures = data.get("fixtures", []) or []
+        self.standings = data.get("standings", []) or []
+        self.news_items = data.get("news", []) or []
+        self.logos = data.get("logos", []) or []
+        self.backend_usage = data.get("usage", {}) or {}
+        self.export_status = data.get("export_status", {}) or {}
+        self.live_games = data.get("live_games", {}) or {}
+        self.odds_markets = data.get("odds_markets", {}) or {}
+        self.bet365_prematch = data.get("bet365_prematch", {}) or {}
+        self.tournament_odds = data.get("tournament_odds", {}) or {}
 
-        self.teams_df = pd.read_csv(self.project_path("database", "teams.csv"))
-        if "team" not in self.teams_df.columns:
-            first_col = self.teams_df.columns[0]
-            self.teams_df = self.teams_df.rename(columns={first_col: "team"})
-
-        self.team_list = sorted(self.teams_df["team"].dropna().astype(str).unique().tolist())
-        print("Teams loaded:", len(self.team_list))
-
-        self.players_df = self.player_db.load_or_enrich(self.project_path("database"))
-
-        form_path = self.project_path("database", "team_form.csv")
-        if os.path.exists(form_path) and os.path.getsize(form_path) > 0:
-            try:
-                self.team_form_df = pd.read_csv(form_path)
-            except Exception:
-                self.team_form_df = pd.DataFrame()
-
-    # ------------------------------------------------
-    # LIVE REFRESH
-    # ------------------------------------------------
-
-    def refresh_live_data(self):
-        db_dir = self.project_path("database")
-        assets_dir = self.project_path("assets")
-
-        result = self.live_data.refresh_all(db_dir, assets_dir, competition_code="PL")
-        self.load_database()
-
-        self.transfer_market.build_from_players(self.players_df)
-        self.transfer_market.save_to_csv(db_dir)
+        self.team_list = sorted(
+            {
+                t.get("name", "").strip()
+                for t in self.teams
+                if isinstance(t, dict) and t.get("name")
+            }
+        )
 
         self.reload_selectors()
         self.reload_side_panels()
 
-        if result["updated"]:
-            self.add_commentary("Live football data refreshed.")
-        else:
-            self.add_commentary("Running with local database.")
+        used = self.backend_usage.get("used")
+        limit_ = self.backend_usage.get("limit")
+        remaining = self.backend_usage.get("remaining")
 
-        for note in result["notes"]:
-            self.add_commentary(note)
+        if self.team_list:
+            if used is not None and limit_ is not None:
+                self.status_label.config(
+                    text=f"{self.current_competition} ready | Teams: {len(self.team_list)} | Usage: {used}/{limit_} | Remaining: {remaining}"
+                )
+            else:
+                self.status_label.config(text=f"{self.current_competition} ready | Teams: {len(self.team_list)}")
+            self.add_commentary(f"Simulator data loaded for {self.current_competition}. Teams available: {len(self.team_list)}")
+        else:
+            self.status_label.config(text=f"No teams loaded for {self.current_competition}. Backend provider may be failing.")
+            self.add_commentary(f"No teams loaded for {self.current_competition}. Backend provider may be failing.")
+
+        self.show_export_summary()
+
+    def _on_data_error(self, error):
+        self.status_label.config(text=f"Data load error: {error}")
+        self.add_commentary("Failed to refresh backend data; using whatever local cache is available.")
+
+    def show_export_summary(self):
+        files = self.export_status.get("files", []) if isinstance(self.export_status, dict) else []
+        if not files:
+            self.add_commentary("Export status unavailable.")
+            return
+
+        existing = [f["file"] for f in files if f.get("exists")]
+        missing = [f["file"] for f in files if not f.get("exists")]
+
+        if existing:
+            self.add_commentary("Export files found: " + ", ".join(existing[:5]))
+        if missing:
+            self.add_commentary("Missing export files: " + ", ".join(missing[:5]))
 
     def schedule_live_refresh_loop(self):
         self.root.after(self.live_refresh_ms, self._live_refresh_wrapper)
 
     def _live_refresh_wrapper(self):
-        self.refresh_live_data()
+        self.status_label.config(text=f"Refreshing backend data for {self.current_competition}...")
+        self.add_commentary(f"Refreshing backend/cache data for {self.current_competition}...")
+        run_in_background(
+            self._fetch_all_data,
+            self._on_data_loaded,
+            self._on_data_error,
+        )
         self.schedule_live_refresh_loop()
 
     def reload_selectors(self):
@@ -145,47 +248,178 @@ class FootballSimulator:
         self.away_box["values"] = self.team_list
 
         if len(self.team_list) >= 2:
-            if not self.home_box.get():
+            if not self.home_box.get() or self.home_box.get() not in self.team_list:
                 self.home_box.set(self.team_list[0])
-            if not self.away_box.get():
+            if not self.away_box.get() or self.away_box.get() not in self.team_list:
                 self.away_box.set(self.team_list[1])
+        elif len(self.team_list) == 1:
+            self.home_box.set(self.team_list[0])
+            self.away_box.set(self.team_list[0])
 
     def reload_side_panels(self):
-        for box in (self.table_box, self.fixtures_box, self.news_box):
+        for box in (self.table_box, self.fixtures_box, self.live_box, self.odds_box, self.news_box):
             box.delete("1.0", "end")
 
-        try:
-            table_df = pd.read_csv(self.project_path("database", "league_table.csv"))
-            for _, row in table_df.head(16).iterrows():
+        if self.standings:
+            for row in self.standings[:20]:
                 self.table_box.insert("end", f"{row.get('team','')}  P:{row.get('played',0)}  Pts:{row.get('points',0)}\n")
-        except Exception:
-            self.table_box.insert("end", "League table unavailable.\n")
+        else:
+            self.table_box.insert("end", "No standings loaded.\n")
 
-        try:
-            fix_df = pd.read_csv(self.project_path("database", "fixtures.csv"))
-            for _, row in fix_df.head(14).iterrows():
+        if self.fixtures:
+            for row in self.fixtures[:20]:
                 self.fixtures_box.insert("end", f"{row.get('home','')} vs {row.get('away','')}  {row.get('status','')}\n")
-        except Exception:
-            self.fixtures_box.insert("end", "Fixtures unavailable.\n")
+        else:
+            self.fixtures_box.insert("end", "No fixtures loaded.\n")
 
-        try:
-            news_df = pd.read_csv(self.project_path("database", "club_news.csv"))
-            for _, row in news_df.head(10).iterrows():
+        if isinstance(self.live_games, dict):
+            live_matches = self.live_games.get("live_matches", []) or []
+            scheduled = self.live_games.get("scheduled_with_odds", []) or []
+            errors = self.live_games.get("errors", []) or []
+
+            if live_matches:
+                self.live_box.insert("end", "LIVE MATCHES\n")
+                for m in live_matches[:12]:
+                    home = m.get("home", "")
+                    away = m.get("away", "")
+                    sh = m.get("score_home", "?")
+                    sa = m.get("score_away", "?")
+                    minute = m.get("minute", "")
+                    status = m.get("status", "LIVE")
+                    self.live_box.insert("end", f"{home} {sh}-{sa} {away}  {minute} {status}\n")
+
+            elif scheduled:
+                self.live_box.insert("end", "UPCOMING WITH ODDS\n")
+                for m in scheduled[:12]:
+                    self.live_box.insert(
+                        "end",
+                        f"{m.get('home','')} vs {m.get('away','')}  {m.get('status','')}  {m.get('start_time','')}\n"
+                    )
+            else:
+                self.live_box.insert("end", "No live games loaded yet.\n")
+
+            if errors:
+                self.live_box.insert("end", "\nErrors:\n")
+                for err in errors[:4]:
+                    self.live_box.insert("end", f"- {err}\n")
+        else:
+            self.live_box.insert("end", "No live games loaded yet.\n")
+
+        self.odds_box.insert("end", "ODDS SUMMARY\n")
+
+        if isinstance(self.bet365_prematch, dict):
+            summary = self.bet365_prematch.get("summary", {}) or {}
+            event_count = summary.get("event_count", 0)
+            self.odds_box.insert("end", f"Bet365 prematch events: {event_count}\n")
+
+            samples = summary.get("samples", []) or []
+            if samples:
+                self.odds_box.insert("end", "Bet365 sample lines:\n")
+                for s in samples[:4]:
+                    self.odds_box.insert(
+                        "end",
+                        f"{s.get('market','1X2')}  H:{s.get('home','-')} D:{s.get('draw','-')} A:{s.get('away','-')}\n"
+                    )
+
+        if isinstance(self.odds_markets, dict):
+            market_count = self.odds_markets.get("market_count", 0)
+            self.odds_box.insert("end", f"Available markets: {market_count}\n")
+
+        if isinstance(self.tournament_odds, dict):
+            summary = self.tournament_odds.get("summary", {}) or {}
+            item_count = summary.get("item_count", 0)
+            self.odds_box.insert("end", f"Tournament odds items: {item_count}\n")
+
+            samples = summary.get("samples", []) or []
+            if samples:
+                self.odds_box.insert("end", "Tournament sample lines:\n")
+                for s in samples[:4]:
+                    self.odds_box.insert(
+                        "end",
+                        f"{s.get('market','1X2')}  H:{s.get('home','-')} D:{s.get('draw','-')} A:{s.get('away','-')}\n"
+                    )
+
+        if self.news_items:
+            for row in self.news_items[:20]:
                 self.news_box.insert("end", f"{row.get('title','')}\n{row.get('summary','')}\n\n")
-        except Exception:
-            self.news_box.insert("end", "Club news unavailable.\n")
+        else:
+            self.news_box.insert("end", "No news loaded.\n")
 
     # ------------------------------------------------
     # UI
     # ------------------------------------------------
 
     def build_ui(self):
-        self.main = tk.Frame(self.root, bg="#0f172a")
-        self.main.pack(fill="both", expand=True)
+        self.outer = tk.Frame(self.root, bg="#0f172a")
+        self.outer.pack(fill="both", expand=True)
+
+        self.app_canvas = tk.Canvas(self.outer, bg="#0f172a", highlightthickness=0)
+        self.app_canvas.pack(side="left", fill="both", expand=True)
+
+        self.v_scroll = tk.Scrollbar(self.outer, orient="vertical", command=self.app_canvas.yview)
+        self.v_scroll.pack(side="right", fill="y")
+
+        self.h_scroll = tk.Scrollbar(self.root, orient="horizontal", command=self.app_canvas.xview)
+        self.h_scroll.pack(side="bottom", fill="x")
+
+        self.app_canvas.configure(yscrollcommand=self.v_scroll.set, xscrollcommand=self.h_scroll.set)
+
+        self.main = tk.Frame(self.app_canvas, bg="#0f172a")
+        self.canvas_window = self.app_canvas.create_window((0, 0), window=self.main, anchor="nw")
+
+        self.main.bind("<Configure>", self.on_main_configure)
+        self.app_canvas.bind("<Configure>", self.on_canvas_configure)
+
+        self.app_canvas.bind_all("<MouseWheel>", self.on_mousewheel)
+        self.app_canvas.bind_all("<Shift-MouseWheel>", self.on_shift_mousewheel)
+        self.root.bind_all("<Up>", lambda e: self.app_canvas.yview_scroll(-1, "units"))
+        self.root.bind_all("<Down>", lambda e: self.app_canvas.yview_scroll(1, "units"))
+        self.root.bind_all("<Left>", lambda e: self.app_canvas.xview_scroll(-1, "units"))
+        self.root.bind_all("<Right>", lambda e: self.app_canvas.xview_scroll(1, "units"))
+        self.app_canvas.bind("<ButtonPress-1>", self.start_pan)
+        self.app_canvas.bind("<B1-Motion>", self.do_pan)
 
         self.build_header()
-        self.build_body()
-        self.build_footer()
+
+        self.page_nav = tk.Frame(self.main, bg="#14213d")
+        self.page_nav.pack(fill="x", pady=(0, 4))
+
+        tk.Button(self.page_nav, text="Match", command=lambda: self.show_page("match"), bg="#1b3a5a", fg="white").pack(side="left", padx=4, pady=4)
+        tk.Button(self.page_nav, text="Settings", command=lambda: self.show_page("settings"), bg="#1b3a5a", fg="white").pack(side="left", padx=4, pady=4)
+
+        self.match_page = tk.Frame(self.main, bg="#0f172a")
+        self.settings_page = tk.Frame(self.main, bg="#0f172a")
+
+        self.build_match_page()
+        self.build_settings_page()
+        self.show_page("match")
+
+    def on_main_configure(self, _event=None):
+        self.app_canvas.configure(scrollregion=self.app_canvas.bbox("all"))
+
+    def on_canvas_configure(self, event):
+        self.app_canvas.itemconfig(self.canvas_window, width=max(event.width, 1280))
+        self.app_canvas.configure(scrollregion=self.app_canvas.bbox("all"))
+
+    def on_mousewheel(self, event):
+        self.app_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def on_shift_mousewheel(self, event):
+        self.app_canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def start_pan(self, event):
+        self.app_canvas.scan_mark(event.x, event.y)
+
+    def do_pan(self, event):
+        self.app_canvas.scan_dragto(event.x, event.y, gain=1)
+
+    def show_page(self, page_name):
+        self.match_page.pack_forget()
+        self.settings_page.pack_forget()
+        if page_name == "settings":
+            self.settings_page.pack(fill="both", expand=True)
+        else:
+            self.match_page.pack(fill="both", expand=True)
 
     def build_header(self):
         self.header = tk.Frame(self.main, bg="#1e293b", height=84)
@@ -206,43 +440,58 @@ class FootballSimulator:
         self.away_logo_label = tk.Label(self.header, bg="#1e293b")
         self.away_logo_label.pack(side="left", padx=(4, 12))
 
+        self.prediction_label = tk.Label(
+            self.header,
+            text="Prediction: waiting",
+            bg="#1e293b",
+            fg="#ffd166",
+            font=("Arial", 11, "bold"),
+            wraplength=360,
+            justify="left"
+        )
+        self.prediction_label.pack(side="left", padx=10)
+
         self.clock_label = tk.Label(self.header, text="00:00", bg="#1e293b", fg="white", font=("Arial", 20))
         self.clock_label.pack(side="right", padx=20)
 
         self.possession_label = tk.Label(self.header, text="Possession 50% - 50%", bg="#1e293b", fg="white", font=("Arial", 12))
         self.possession_label.pack(side="right", padx=20)
 
-    def build_body(self):
-        body = tk.Frame(self.main, bg="#0f172a")
+    def build_match_page(self):
+        body = tk.Frame(self.match_page, bg="#0f172a")
         body.pack(fill="both", expand=True)
-
         self.build_sidebar(body)
         self.build_pitch(body)
         self.build_right_panel(body)
+        self.build_footer()
 
     def build_sidebar(self, parent):
         self.sidebar = tk.Frame(parent, bg="#0b2545", width=300)
         self.sidebar.pack(side="left", fill="y")
 
+        tk.Label(self.sidebar, text="League", bg="#0b2545", fg="white").pack(pady=(16, 6))
+        self.league_box = ttk.Combobox(self.sidebar, values=list(LEAGUE_OPTIONS.keys()), state="readonly")
+        self.league_box.pack(padx=12, fill="x")
+        self.league_box.set(self._league_name_from_code(self.current_competition))
+        self.league_box.bind("<<ComboboxSelected>>", self.on_league_changed)
+
         tk.Label(self.sidebar, text="Home Team", bg="#0b2545", fg="white").pack(pady=(16, 6))
-        self.home_box = ttk.Combobox(self.sidebar, values=self.team_list, height=18, state="normal")
+        self.home_box = ttk.Combobox(self.sidebar, values=self.team_list, height=20, state="normal")
         self.home_box.pack(padx=12, fill="x")
 
         tk.Label(self.sidebar, text="Away Team", bg="#0b2545", fg="white").pack(pady=(16, 6))
-        self.away_box = ttk.Combobox(self.sidebar, values=self.team_list, height=18, state="normal")
+        self.away_box = ttk.Combobox(self.sidebar, values=self.team_list, height=20, state="normal")
         self.away_box.pack(padx=12, fill="x")
 
+        formation_values = ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2"]
+
         tk.Label(self.sidebar, text="Home Formation", bg="#0b2545", fg="white").pack(pady=(16, 6))
-        self.home_formation_box = ttk.Combobox(self.sidebar, values=["4-3-3", "4-2-3-1"], state="readonly")
+        self.home_formation_box = ttk.Combobox(self.sidebar, values=formation_values, state="readonly")
         self.home_formation_box.pack(padx=12, fill="x")
 
         tk.Label(self.sidebar, text="Away Formation", bg="#0b2545", fg="white").pack(pady=(16, 6))
-        self.away_formation_box = ttk.Combobox(self.sidebar, values=["4-3-3", "4-2-3-1"], state="readonly")
+        self.away_formation_box = ttk.Combobox(self.sidebar, values=formation_values, state="readonly")
         self.away_formation_box.pack(padx=12, fill="x")
-
-        if len(self.team_list) >= 2:
-            self.home_box.set(self.team_list[0])
-            self.away_box.set(self.team_list[1])
 
         self.home_formation_box.set("4-3-3")
         self.away_formation_box.set("4-2-3-1")
@@ -252,13 +501,29 @@ class FootballSimulator:
         tk.Button(self.sidebar, text="▶ Start Match", command=self.start_match, **btn_cfg).pack(pady=(20, 6))
         tk.Button(self.sidebar, text="⏸ Pause Match", command=self.pause_match, **btn_cfg).pack(pady=6)
         tk.Button(self.sidebar, text="🔄 Reset Match", command=self.reset_match, **btn_cfg).pack(pady=6)
-        tk.Button(self.sidebar, text="🔃 Refresh Live Data", command=self.refresh_live_data, **btn_cfg).pack(pady=6)
+        tk.Button(self.sidebar, text="🔃 Refresh Live Data", command=self.load_initial_data, **btn_cfg).pack(pady=6)
         tk.Button(self.sidebar, text="💰 Transfer Market", command=self.open_transfer_market, **btn_cfg).pack(pady=6)
-        tk.Button(self.sidebar, text="⚙ Settings", command=self.open_settings, **btn_cfg).pack(pady=6)
+        tk.Button(self.sidebar, text="⚙ Settings", command=lambda: self.show_page("settings"), **btn_cfg).pack(pady=6)
         tk.Button(self.sidebar, text="❌ Quit", command=self.quit_app, **btn_cfg).pack(pady=6)
 
         self.tactic_label = tk.Label(self.sidebar, text="Live tactics: waiting", bg="#0b2545", fg="#cbd5e1", justify="left", wraplength=250)
         self.tactic_label.pack(pady=(18, 6), padx=12)
+
+        self.form_label = tk.Label(self.sidebar, text="Team form: waiting", bg="#0b2545", fg="#93c5fd", justify="left", wraplength=250)
+        self.form_label.pack(pady=(8, 6), padx=12)
+
+    def _league_name_from_code(self, code):
+        for name, value in LEAGUE_OPTIONS.items():
+            if value == code:
+                return name
+        return "Premier League"
+
+    def on_league_changed(self, _event=None):
+        selected = self.league_box.get()
+        code = LEAGUE_OPTIONS.get(selected, "PL")
+        self.current_competition = code
+        self.add_commentary(f"League changed to {selected} ({code}). Refreshing data...")
+        self.load_initial_data()
 
     def build_pitch(self, parent):
         self.pitch_wrap = tk.Frame(parent, bg="#0f172a")
@@ -271,13 +536,13 @@ class FootballSimulator:
             bg="#2e7d32",
             highlightthickness=0
         )
-        self.canvas.pack(expand=True, pady=26)
+        self.canvas.pack(expand=True, pady=26, padx=10)
 
     def build_right_panel(self, parent):
-        self.right_panel = tk.Frame(parent, bg="#0b2545", width=380)
+        self.right_panel = tk.Frame(parent, bg="#0b2545", width=390)
         self.right_panel.pack(side="right", fill="both")
 
-        self.right_canvas = tk.Canvas(self.right_panel, bg="#0b2545", highlightthickness=0, width=380)
+        self.right_canvas = tk.Canvas(self.right_panel, bg="#0b2545", highlightthickness=0, width=390)
         self.right_scroll = tk.Scrollbar(self.right_panel, orient="vertical", command=self.right_canvas.yview)
         self.right_inner = tk.Frame(self.right_canvas, bg="#0b2545")
 
@@ -308,52 +573,112 @@ class FootballSimulator:
         self.fixtures_box = tk.Text(self.right_inner, height=6, width=44, bg="#091c34", fg="white")
         self.fixtures_box.pack(padx=10)
 
+        tk.Label(self.right_inner, text="Live Games", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
+        self.live_box = tk.Text(self.right_inner, height=6, width=44, bg="#091c34", fg="white")
+        self.live_box.pack(padx=10)
+
+        tk.Label(self.right_inner, text="Odds Summary", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
+        self.odds_box = tk.Text(self.right_inner, height=6, width=44, bg="#091c34", fg="white")
+        self.odds_box.pack(padx=10)
+
         tk.Label(self.right_inner, text="Club News", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
         self.news_box = tk.Text(self.right_inner, height=6, width=44, bg="#091c34", fg="white")
         self.news_box.pack(padx=10)
 
     def build_footer(self):
-        self.commentary_box = tk.Text(self.root, height=8, bg="#020617", fg="white")
+        footer = tk.Frame(self.match_page, bg="#020617")
+        footer.pack(fill="x")
+
+        self.commentary_box = tk.Text(footer, height=7, bg="#020617", fg="white")
         self.commentary_box.pack(fill="x")
+
+        self.status_label = tk.Label(footer, text="Ready", bg="#020617", fg="#94a3b8", anchor="w")
+        self.status_label.pack(fill="x", padx=8, pady=4)
+
+    def build_settings_page(self):
+        frame = self.settings_page
+
+        title = tk.Label(frame, text="Settings", font=("Arial", 22, "bold"), bg="#0f172a", fg="white")
+        title.pack(pady=16)
+
+        content = tk.Frame(frame, bg="#0f172a")
+        content.pack(fill="both", expand=True, padx=20, pady=10)
+
+        visual_card = tk.LabelFrame(content, text="Visual Settings", bg="#0b2545", fg="white", padx=12, pady=12)
+        visual_card.pack(fill="x", pady=8)
+
+        tk.Button(visual_card, text="Toggle Dark / Light", command=self.toggle_theme, bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
+        tk.Button(visual_card, text="Toggle Player Labels", command=self.toggle_player_labels, bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
+        tk.Button(visual_card, text="Toggle Tracker Lines", command=self.toggle_tracker_lines, bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
+
+        league_card = tk.LabelFrame(content, text="League Settings", bg="#0b2545", fg="white", padx=12, pady=12)
+        league_card.pack(fill="x", pady=8)
+
+        tk.Label(league_card, text="Default league", bg="#0b2545", fg="white").pack(anchor="w")
+        self.settings_league_box = ttk.Combobox(league_card, values=list(LEAGUE_OPTIONS.keys()), state="readonly")
+        self.settings_league_box.pack(fill="x", pady=6)
+        self.settings_league_box.set(self._league_name_from_code(self.current_competition))
+        self.settings_league_box.bind("<<ComboboxSelected>>", self.on_settings_league_changed)
+
+        game_card = tk.LabelFrame(content, text="Game Settings", bg="#0b2545", fg="white", padx=12, pady=12)
+        game_card.pack(fill="x", pady=8)
+
+        tk.Button(game_card, text="Match Duration = 60s", command=lambda: self.set_match_duration(60), bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
+        tk.Button(game_card, text="Match Duration = 30s", command=lambda: self.set_match_duration(30), bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
+        tk.Button(game_card, text="Live Refresh = 10 min", command=lambda: self.set_live_refresh(10), bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
+        tk.Button(game_card, text="Live Refresh = 15 min", command=lambda: self.set_live_refresh(15), bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
+
+        audio_card = tk.LabelFrame(content, text="Audio Settings", bg="#0b2545", fg="white", padx=12, pady=12)
+        audio_card.pack(fill="x", pady=8)
+
+        tk.Button(audio_card, text="Mute / Unmute Crowd", command=self.toggle_mute, bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
+
+        gfx_card = tk.LabelFrame(content, text="Graphics Settings", bg="#0b2545", fg="white", padx=12, pady=12)
+        gfx_card.pack(fill="x", pady=8)
+
+        tk.Button(gfx_card, text="Normal Graphics", command=lambda: self.set_graphics_mode(False), bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
+        tk.Button(gfx_card, text="Fast Graphics", command=lambda: self.set_graphics_mode(True), bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
+
+        about_card = tk.LabelFrame(content, text="About", bg="#0b2545", fg="white", padx=12, pady=12)
+        about_card.pack(fill="x", pady=8)
+
+        about_text = (
+            f"Football Match Simulator\n"
+            f"Version: {APP_VERSION}\n"
+            f"{APP_COPYRIGHT}\n"
+            f"Architecture: Simulator → backend → providers"
+        )
+        tk.Label(about_card, text=about_text, justify="left", bg="#0b2545", fg="white").pack(anchor="w")
+
+        tk.Button(frame, text="Back to Match", command=lambda: self.show_page("match"), bg="#1b3a5a", fg="white").pack(pady=12)
+
+    def on_settings_league_changed(self, _event=None):
+        selected = self.settings_league_box.get()
+        code = LEAGUE_OPTIONS.get(selected, "PL")
+        self.current_competition = code
+        self.league_box.set(selected)
+        self.add_commentary(f"League changed from settings to {selected} ({code}). Refreshing data...")
+        self.load_initial_data()
 
     # ------------------------------------------------
     # HELPERS
     # ------------------------------------------------
 
-    def get_team_strength(self, team_name):
-        try:
-            row = self.teams_df[self.teams_df["team"] == team_name].iloc[0]
-            return float(row.get("strength", 75))
-        except Exception:
-            return 75.0
-
-    def get_form_row(self, team_name):
-        if self.team_form_df is None or self.team_form_df.empty:
-            return None
-        rows = self.team_form_df[self.team_form_df["team"] == team_name]
-        if rows.empty:
-            return None
-        return rows.iloc[0]
-
-    def get_team_form(self, team_name):
-        row = self.get_form_row(team_name)
-        return float(row["form_last5"]) if row is not None and "form_last5" in row else 0.60
-
-    def get_team_morale(self, team_name):
-        row = self.get_form_row(team_name)
-        return float(row["morale"]) if row is not None and "morale" in row else 0.65
-
     def load_header_logos(self, home, away):
-        home_logo = self.logo_loader.load(home)
-        away_logo = self.logo_loader.load(away)
+        home_logo = self.logo_loader.load(home, small=True)
+        away_logo = self.logo_loader.load(away, small=True)
 
         if home_logo is not None:
             self.home_logo_label.config(image=home_logo)
             self.home_logo_label.image = home_logo
+        else:
+            self.home_logo_label.config(image="", text="")
 
         if away_logo is not None:
             self.away_logo_label.config(image=away_logo)
             self.away_logo_label.image = away_logo
+        else:
+            self.away_logo_label.config(image="", text="")
 
     # ------------------------------------------------
     # MATCH CONTROL
@@ -365,35 +690,43 @@ class FootballSimulator:
         home_form = self.home_formation_box.get().strip()
         away_form = self.away_formation_box.get().strip()
 
+        if not self.team_list:
+            self.add_commentary("No teams available. Fix backend provider keys or cache export first.")
+            self.status_label.config(text="Cannot start match: no teams loaded")
+            return
+
         if not home or not away:
             self.add_commentary("Please select both teams.")
             return
 
         self.timeline_engine.clear()
         self.timeline_box.delete("1.0", "end")
+        self.form_label.config(text="Team form: loading...")
+        self.status_label.config(text="Preparing match...")
 
         self.home_name_label.config(text=home)
         self.away_name_label.config(text=away)
         self.load_header_logos(home, away)
 
-        prediction = self.prediction_engine.predict_match(
-            self.get_team_strength(home),
-            self.get_team_strength(away),
-            self.get_team_form(home),
-            self.get_team_form(away),
-            self.get_team_morale(home),
-            self.get_team_morale(away),
-        )
-        self.add_commentary(self.prediction_engine.format_prediction(home, away, prediction))
-
-        self.engine.configure_match(home, away, home_form, away_form)
-
         self.home_score = 0
         self.away_score = 0
         self.match_time = 0
         self.match_finished = False
+
         self.score_label.config(text="0 - 0")
         self.clock_label.config(text="00:00")
+
+        self.engine.configure_match(home, away, home_form, away_form)
+        self.engine.frame_ms = 30 if self.fast_graphics else 16
+
+        run_in_background(
+            lambda: {
+                "home_form": self.data_client.load_team_form(home, self.current_competition),
+                "away_form": self.data_client.load_team_form(away, self.current_competition),
+            },
+            lambda result: self._apply_pre_match_data(home, away, result),
+            self._on_data_error,
+        )
 
         if not self.engine.running:
             self.engine.running = True
@@ -401,9 +734,37 @@ class FootballSimulator:
             self.audio.play_crowd()
             self.add_commentary(f"{home} vs {away} kickoff!")
 
+    def _apply_pre_match_data(self, home, away, result):
+        home_form = result.get("home_form", {}) if result else {}
+        away_form = result.get("away_form", {}) if result else {}
+
+        prediction_text = self.prediction_engine.build_prediction(
+            home=home,
+            away=away,
+            home_form=home_form,
+            away_form=away_form,
+            live_games=self.live_games,
+            prematch_summary=self.bet365_prematch,
+            tournament_odds=self.tournament_odds,
+        )
+
+        self.prediction_label.config(text=prediction_text)
+        self.add_commentary(prediction_text)
+
+        self.form_label.config(
+            text=(
+                f"Team form\n"
+                f"{home}: {' '.join(home_form.get('form_last5', [])) or 'n/a'}\n"
+                f"{away}: {' '.join(away_form.get('form_last5', [])) or 'n/a'}"
+            )
+        )
+
+        self.status_label.config(text="Match started")
+
     def pause_match(self):
         self.engine.running = False
         self.add_commentary("Match paused.")
+        self.status_label.config(text="Match paused")
 
     def reset_match(self):
         self.engine.reset_match()
@@ -418,16 +779,16 @@ class FootballSimulator:
         self.clock_label.config(text="00:00")
         self.score_label.config(text="0 - 0")
         self.possession_label.config(text="Possession 50% - 50%")
+        self.prediction_label.config(text="Prediction: waiting")
         self.stats_box.delete("1.0", "end")
         self.timeline_box.delete("1.0", "end")
         self.tactic_label.config(text="Live tactics: waiting")
+        self.form_label.config(text="Team form: waiting")
+        self.status_label.config(text="Match reset")
 
         self.add_commentary("Match reset.")
 
     def open_transfer_market(self):
-        db_dir = self.project_path("database")
-        self.transfer_market.load_from_csv(db_dir)
-
         win = tk.Toplevel(self.root)
         win.title("Transfer Market")
         win.geometry("560x430")
@@ -435,16 +796,8 @@ class FootballSimulator:
         box = tk.Text(win, bg="#091c34", fg="white")
         box.pack(fill="both", expand=True)
 
-        if self.transfer_market.market.empty:
-            box.insert("end", "No market data available.\n")
-            return
-
-        for _, row in self.transfer_market.market.head(40).iterrows():
-            box.insert(
-                "end",
-                f"{row.get('player','')} | {row.get('team','')} | {row.get('position','')} | "
-                f"Rating {row.get('rating','')} | Value {row.get('value','')}m\n"
-            )
+        box.insert("end", "Transfer market integration is ready.\n")
+        box.insert("end", "This window can be connected to backend-backed player market data later.\n")
 
     # ------------------------------------------------
     # LIVE TACTICS
@@ -454,27 +807,20 @@ class FootballSimulator:
         if hasattr(self, "engine") and self.engine.running and not self.match_finished:
             home_pos, away_pos = self.engine.get_possession_snapshot()
 
-            home_decision = self.manager_ai.decide(
-                "home",
-                self.home_score,
-                self.away_score,
-                self.engine.get_average_stamina("home"),
-                home_pos
-            )
-            away_decision = self.manager_ai.decide(
-                "away",
-                self.away_score,
-                self.home_score,
-                self.engine.get_average_stamina("away"),
-                away_pos
+            home_shape = "attack" if self.home_score < self.away_score else "balanced"
+            away_shape = "attack" if self.away_score < self.home_score else "balanced"
+
+            self.engine.set_tactics(
+                {"formation": self.home_formation_box.get(), "press": 0.58, "pass_speed": 1.0, "shot_bias": 0.11, "shape": home_shape},
+                {"formation": self.away_formation_box.get(), "press": 0.58, "pass_speed": 1.0, "shot_bias": 0.11, "shape": away_shape},
             )
 
-            self.engine.set_tactics(home_decision, away_decision)
             self.tactic_label.config(
                 text=(
                     f"Live tactics\n"
-                    f"Home: {home_decision['formation']} | {home_decision['shape']}\n"
-                    f"Away: {away_decision['formation']} | {away_decision['shape']}"
+                    f"Home: {self.home_formation_box.get()} | {home_shape}\n"
+                    f"Away: {self.away_formation_box.get()} | {away_shape}\n"
+                    f"Possession: {home_pos}% - {away_pos}%"
                 )
             )
 
@@ -487,7 +833,7 @@ class FootballSimulator:
     def add_timeline_event(self, minute, kind, text):
         self.timeline_engine.add_event(minute, kind, text)
         self.timeline_box.delete("1.0", "end")
-        for line in self.timeline_engine.as_lines()[-18:]:
+        for line in self.timeline_engine.as_lines(limit=24):
             self.timeline_box.insert("end", line + "\n")
 
     def goal_scored(self, team):
@@ -521,7 +867,7 @@ class FootballSimulator:
     def add_commentary(self, text):
         self.commentary_box.insert("end", text + "\n")
         lines = int(self.commentary_box.index("end-1c").split(".")[0])
-        if lines > 220:
+        if lines > 240:
             self.commentary_box.delete("1.0", "2.0")
         self.commentary_box.see("end")
 
@@ -541,15 +887,10 @@ class FootballSimulator:
 
         self.add_commentary(f"Full time: {home} {self.home_score} - {self.away_score} {away}")
 
-        pred = self.prediction_engine.predict_match(
-            self.get_team_strength(home),
-            self.get_team_strength(away),
-            self.get_team_form(home),
-            self.get_team_form(away),
-            self.get_team_morale(home),
-            self.get_team_morale(away),
-        )
-        self.add_commentary(self.prediction_engine.format_post_match_reference(home, away, pred, self.home_score, self.away_score))
+        post_text = f"Post-match model: {home} {self.home_score}-{self.away_score} {away}"
+        self.prediction_label.config(text=post_text)
+        self.add_commentary(post_text)
+        self.status_label.config(text="Match finished")
 
     def update_clock(self):
         if hasattr(self, "engine") and self.engine.running and not self.match_finished:
@@ -564,23 +905,8 @@ class FootballSimulator:
         self.root.after(1000, self.update_clock)
 
     # ------------------------------------------------
-    # SETTINGS / QUIT
+    # SETTINGS
     # ------------------------------------------------
-
-    def open_settings(self):
-        win = tk.Toplevel(self.root)
-        win.title("Settings")
-        win.geometry("400x340")
-
-        tk.Label(win, text="Appearance", font=("Arial", 12, "bold")).pack(pady=10)
-        tk.Button(win, text="Toggle Dark / Light", command=self.toggle_theme).pack(pady=6)
-        tk.Button(win, text="Mute / Unmute Crowd", command=self.toggle_mute).pack(pady=6)
-
-        tk.Label(win, text="Simulation", font=("Arial", 12, "bold")).pack(pady=10)
-        tk.Button(win, text="Set Match Length = 5s", command=lambda: self.set_match_duration(5)).pack(pady=4)
-        tk.Button(win, text="Set Match Length = 8s", command=lambda: self.set_match_duration(8)).pack(pady=4)
-        tk.Button(win, text="Set Live Refresh = 10 min", command=lambda: self.set_live_refresh(10)).pack(pady=4)
-        tk.Button(win, text="Set Live Refresh = 15 min", command=lambda: self.set_live_refresh(15)).pack(pady=4)
 
     def set_match_duration(self, secs):
         self.match_duration_seconds = secs
@@ -592,13 +918,28 @@ class FootballSimulator:
 
     def toggle_theme(self):
         self.dark_mode = not self.dark_mode
-        if self.dark_mode:
-            self.root.configure(bg="#0f172a")
-        else:
-            self.root.configure(bg="#dbe4ee")
+        bg = "#0f172a" if self.dark_mode else "#dbe4ee"
+
+        self.root.configure(bg=bg)
+        self.main.configure(bg=bg)
+        self.match_page.configure(bg=bg)
+        self.settings_page.configure(bg=bg)
 
     def toggle_mute(self):
-        self.audio.set_muted(not self.audio.muted)
+        self.audio_enabled = not self.audio_enabled
+        self.audio.set_muted(not self.audio_enabled)
+
+    def toggle_player_labels(self):
+        self.show_player_labels = not self.show_player_labels
+        self.add_commentary(f"Player labels {'ON' if self.show_player_labels else 'OFF'}.")
+
+    def toggle_tracker_lines(self):
+        self.show_tracker_lines = not self.show_tracker_lines
+        self.add_commentary(f"Tracker lines {'ON' if self.show_tracker_lines else 'OFF'}.")
+
+    def set_graphics_mode(self, fast_mode):
+        self.fast_graphics = fast_mode
+        self.add_commentary("Fast graphics enabled." if fast_mode else "Normal graphics enabled.")
 
     def quit_app(self):
         if messagebox.askyesno("Quit", "Exit simulator?"):
