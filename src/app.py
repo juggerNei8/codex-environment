@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox
 import os
 
 os.environ.setdefault("SIMULATOR_TOKEN", "change_me_simulator_token")
-os.environ.setdefault("BACKEND_BASE_URL", "http://127.0.0.1:8000")
+os.environ.setdefault("BACKEND_BASE_URL", "http://127.0.0.1:8001")
 os.environ.setdefault("ENABLE_HTTP_FALLBACK", "true")
 
 from animation_engine import AnimationEngine
