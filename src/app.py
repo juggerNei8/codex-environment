@@ -5,6 +5,7 @@ import os
 os.environ.setdefault("SIMULATOR_TOKEN", "change_me_simulator_token")
 os.environ.setdefault("BACKEND_BASE_URL", "http://127.0.0.1:8001")
 os.environ.setdefault("ENABLE_HTTP_FALLBACK", "true")
+os.environ.setdefault("CACHE_DIR", r"C:\Project X\football-gateway\cache")
 
 from animation_engine import AnimationEngine
 from audio_engine import AudioEngine
@@ -19,7 +20,7 @@ from sim_integration.backend_client import SimulatorDataClient
 from sim_integration.tk_helpers import run_in_background
 
 
-APP_VERSION = "v1.0.6"
+APP_VERSION = "v1.0.7"
 APP_COPYRIGHT = "© 2026 JuggerNei8 Football Simulator"
 
 LEAGUE_OPTIONS = {
@@ -81,6 +82,7 @@ class FootballSimulator:
         self.odds_markets = {}
         self.bet365_prematch = {}
         self.tournament_odds = {}
+        self.selected_fixture_odds = {}
 
         self.build_ui()
 
@@ -256,6 +258,18 @@ class FootballSimulator:
             self.home_box.set(self.team_list[0])
             self.away_box.set(self.team_list[0])
 
+    def _render_selected_odds(self):
+        selected = self.selected_fixture_odds.get("selected", {}) if isinstance(self.selected_fixture_odds, dict) else {}
+        if not isinstance(selected, dict) or not selected:
+            self.odds_box.insert("end", "Selected match odds: unavailable\n")
+            return
+
+        self.odds_box.insert("end", "SELECTED MATCH ODDS\n")
+        self.odds_box.insert(
+            "end",
+            f"{selected.get('market','1X2')}  H:{selected.get('home','-')} D:{selected.get('draw','-')} A:{selected.get('away','-')}\n"
+        )
+
     def reload_side_panels(self):
         for box in (self.table_box, self.fixtures_box, self.live_box, self.odds_box, self.news_box):
             box.delete("1.0", "end")
@@ -306,20 +320,12 @@ class FootballSimulator:
             self.live_box.insert("end", "No live games loaded yet.\n")
 
         self.odds_box.insert("end", "ODDS SUMMARY\n")
+        self._render_selected_odds()
 
         if isinstance(self.bet365_prematch, dict):
             summary = self.bet365_prematch.get("summary", {}) or {}
             event_count = summary.get("event_count", 0)
             self.odds_box.insert("end", f"Bet365 prematch events: {event_count}\n")
-
-            samples = summary.get("samples", []) or []
-            if samples:
-                self.odds_box.insert("end", "Bet365 sample lines:\n")
-                for s in samples[:4]:
-                    self.odds_box.insert(
-                        "end",
-                        f"{s.get('market','1X2')}  H:{s.get('home','-')} D:{s.get('draw','-')} A:{s.get('away','-')}\n"
-                    )
 
         if isinstance(self.odds_markets, dict):
             market_count = self.odds_markets.get("market_count", 0)
@@ -329,15 +335,6 @@ class FootballSimulator:
             summary = self.tournament_odds.get("summary", {}) or {}
             item_count = summary.get("item_count", 0)
             self.odds_box.insert("end", f"Tournament odds items: {item_count}\n")
-
-            samples = summary.get("samples", []) or []
-            if samples:
-                self.odds_box.insert("end", "Tournament sample lines:\n")
-                for s in samples[:4]:
-                    self.odds_box.insert(
-                        "end",
-                        f"{s.get('market','1X2')}  H:{s.get('home','-')} D:{s.get('draw','-')} A:{s.get('away','-')}\n"
-                    )
 
         if self.news_items:
             for row in self.news_items[:20]:
@@ -446,7 +443,7 @@ class FootballSimulator:
             bg="#1e293b",
             fg="#ffd166",
             font=("Arial", 11, "bold"),
-            wraplength=360,
+            wraplength=420,
             justify="left"
         )
         self.prediction_label.pack(side="left", padx=10)
@@ -478,10 +475,12 @@ class FootballSimulator:
         tk.Label(self.sidebar, text="Home Team", bg="#0b2545", fg="white").pack(pady=(16, 6))
         self.home_box = ttk.Combobox(self.sidebar, values=self.team_list, height=20, state="normal")
         self.home_box.pack(padx=12, fill="x")
+        self.home_box.bind("<<ComboboxSelected>>", self.on_team_selection_changed)
 
         tk.Label(self.sidebar, text="Away Team", bg="#0b2545", fg="white").pack(pady=(16, 6))
         self.away_box = ttk.Combobox(self.sidebar, values=self.team_list, height=20, state="normal")
         self.away_box.pack(padx=12, fill="x")
+        self.away_box.bind("<<ComboboxSelected>>", self.on_team_selection_changed)
 
         formation_values = ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2"]
 
@@ -524,6 +523,20 @@ class FootballSimulator:
         self.current_competition = code
         self.add_commentary(f"League changed to {selected} ({code}). Refreshing data...")
         self.load_initial_data()
+
+    def on_team_selection_changed(self, _event=None):
+        home = self.home_box.get().strip()
+        away = self.away_box.get().strip()
+        if home and away and home != away:
+            run_in_background(
+                lambda: self.data_client.load_selected_fixture_odds(home, away),
+                self._on_selected_fixture_odds_loaded,
+                self._on_data_error,
+            )
+
+    def _on_selected_fixture_odds_loaded(self, data):
+        self.selected_fixture_odds = data or {}
+        self.reload_side_panels()
 
     def build_pitch(self, parent):
         self.pitch_wrap = tk.Frame(parent, bg="#0f172a")
@@ -578,7 +591,7 @@ class FootballSimulator:
         self.live_box.pack(padx=10)
 
         tk.Label(self.right_inner, text="Odds Summary", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.odds_box = tk.Text(self.right_inner, height=6, width=44, bg="#091c34", fg="white")
+        self.odds_box = tk.Text(self.right_inner, height=8, width=44, bg="#091c34", fg="white")
         self.odds_box.pack(padx=10)
 
         tk.Label(self.right_inner, text="Club News", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
@@ -723,6 +736,7 @@ class FootballSimulator:
             lambda: {
                 "home_form": self.data_client.load_team_form(home, self.current_competition),
                 "away_form": self.data_client.load_team_form(away, self.current_competition),
+                "selected_fixture_odds": self.data_client.load_selected_fixture_odds(home, away),
             },
             lambda result: self._apply_pre_match_data(home, away, result),
             self._on_data_error,
@@ -737,6 +751,7 @@ class FootballSimulator:
     def _apply_pre_match_data(self, home, away, result):
         home_form = result.get("home_form", {}) if result else {}
         away_form = result.get("away_form", {}) if result else {}
+        self.selected_fixture_odds = result.get("selected_fixture_odds", {}) if result else {}
 
         prediction_text = self.prediction_engine.build_prediction(
             home=home,
@@ -746,6 +761,7 @@ class FootballSimulator:
             live_games=self.live_games,
             prematch_summary=self.bet365_prematch,
             tournament_odds=self.tournament_odds,
+            fixture_odds=self.selected_fixture_odds,
         )
 
         self.prediction_label.config(text=prediction_text)
@@ -759,6 +775,7 @@ class FootballSimulator:
             )
         )
 
+        self.reload_side_panels()
         self.status_label.config(text="Match started")
 
     def pause_match(self):
@@ -775,6 +792,7 @@ class FootballSimulator:
         self.away_score = 0
         self.match_time = 0
         self.match_finished = False
+        self.selected_fixture_odds = {}
 
         self.clock_label.config(text="00:00")
         self.score_label.config(text="0 - 0")
@@ -785,6 +803,7 @@ class FootballSimulator:
         self.tactic_label.config(text="Live tactics: waiting")
         self.form_label.config(text="Team form: waiting")
         self.status_label.config(text="Match reset")
+        self.reload_side_panels()
 
         self.add_commentary("Match reset.")
 
