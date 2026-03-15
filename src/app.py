@@ -20,7 +20,7 @@ from sim_integration.backend_client import SimulatorDataClient
 from sim_integration.tk_helpers import run_in_background
 
 
-APP_VERSION = "v1.1.2"
+APP_VERSION = "v1.1.3"
 APP_COPYRIGHT = "© 2026 JuggerNei8 Football Simulator"
 
 LEAGUE_OPTIONS = {
@@ -60,6 +60,9 @@ class FootballSimulator:
         self.show_tracker_lines = True
         self.show_player_labels = True
         self.fast_graphics = False
+
+        self.backend_online = False
+        self.last_data_source = "unknown"
 
         self.audio = AudioEngine()
         self.commentary_engine = CommentaryEngine()
@@ -109,6 +112,19 @@ class FootballSimulator:
         self.update_manager_tactics_loop()
         self.schedule_live_refresh_loop()
 
+    # ------------------------------------------------
+    # STARTUP / BACKEND
+    # ------------------------------------------------
+
+    def set_backend_indicator(self, online: bool, source: str = "unknown"):
+        self.backend_online = online
+        self.last_data_source = source
+
+        if online:
+            self.backend_indicator.config(text="● Backend Online", fg="#22c55e")
+        else:
+            self.backend_indicator.config(text="● Offline / Cache Mode", fg="#f59e0b")
+
     def startup_backend_then_load(self):
         self.status_label.config(text="Checking backend...")
         self.add_commentary("Checking backend status...")
@@ -122,6 +138,7 @@ class FootballSimulator:
 
     def _on_backend_ready(self, result):
         if result and result.get("ready"):
+            self.set_backend_indicator(True, "backend")
             if result.get("started"):
                 self.add_commentary("Backend started automatically.")
                 self.status_label.config(text="Backend started. Loading simulator data...")
@@ -130,12 +147,20 @@ class FootballSimulator:
                 self.status_label.config(text="Backend online. Loading simulator data...")
             self.load_initial_data()
         else:
-            self.status_label.config(text="Backend did not start.")
-            self.add_commentary("Backend could not be started automatically. Check backend files and VPN.")
+            self.set_backend_indicator(False, "cache")
+            self.status_label.config(text="Backend unavailable. Loading local/cache data...")
+            self.add_commentary("Backend could not be started automatically. Falling back to cache/local data.")
+            self.load_initial_data()
 
     def _on_backend_error(self, error):
+        self.set_backend_indicator(False, "cache")
         self.status_label.config(text=f"Backend startup error: {error}")
-        self.add_commentary("Backend startup failed.")
+        self.add_commentary("Backend startup failed. Using cache/local mode.")
+        self.load_initial_data()
+
+    # ------------------------------------------------
+    # DATA
+    # ------------------------------------------------
 
     def load_initial_data(self):
         self.status_label.config(text=f"Loading backend/cache data for {self.current_competition}...")
@@ -158,8 +183,18 @@ class FootballSimulator:
             "tournament_odds": self.data_client.load_odds_tournaments("17"),
         }
 
+    def _guess_data_source(self):
+        files = self.export_status.get("files", []) if isinstance(self.export_status, dict) else []
+        any_export = any(f.get("exists") for f in files) if files else False
+        if self.team_list and self.backend_online:
+            return "backend"
+        if self.team_list and any_export:
+            return "cache"
+        return "limited"
+
     def _on_data_loaded(self, data):
         if not data:
+            self.set_backend_indicator(False, "cache")
             self.status_label.config(text="No data returned. Using fallback state.")
             self.add_commentary("No backend/cache data returned.")
             return
@@ -178,6 +213,9 @@ class FootballSimulator:
 
         self.team_list = sorted({t.get("name", "").strip() for t in self.teams if isinstance(t, dict) and t.get("name")})
 
+        source = self._guess_data_source()
+        self.set_backend_indicator(source == "backend", source)
+
         self.reload_selectors()
         self.reload_side_panels()
         self.refresh_sidebar_badges()
@@ -189,20 +227,23 @@ class FootballSimulator:
         remaining = self.backend_usage.get("remaining")
 
         if self.team_list:
-            if used is not None and limit_ is not None:
+            if used is not None and limit_ is not None and source == "backend":
                 self.status_label.config(
-                    text=f"{self.current_competition} ready | Teams: {len(self.team_list)} | Usage: {used}/{limit_} | Remaining: {remaining}"
+                    text=f"{self.current_competition} ready | Source: backend | Teams: {len(self.team_list)} | Usage: {used}/{limit_} | Remaining: {remaining}"
                 )
             else:
-                self.status_label.config(text=f"{self.current_competition} ready | Teams: {len(self.team_list)}")
-            self.add_commentary(f"Simulator data loaded for {self.current_competition}. Teams available: {len(self.team_list)}")
+                self.status_label.config(
+                    text=f"{self.current_competition} ready | Source: {source} | Teams: {len(self.team_list)}"
+                )
+            self.add_commentary(f"Simulator data loaded for {self.current_competition}. Teams available: {len(self.team_list)}. Source: {source}.")
         else:
-            self.status_label.config(text=f"No teams loaded for {self.current_competition}. Backend provider may be failing.")
-            self.add_commentary(f"No teams loaded for {self.current_competition}. Backend provider may be failing.")
+            self.status_label.config(text=f"No teams loaded for {self.current_competition}. Backend or cache may be incomplete.")
+            self.add_commentary(f"No teams loaded for {self.current_competition}. Backend or cache may be incomplete.")
 
         self.show_export_summary()
 
     def _on_data_error(self, error):
+        self.set_backend_indicator(False, "cache")
         self.status_label.config(text=f"Data load error: {error}")
         self.add_commentary("Failed to refresh backend data; using whatever local cache is available.")
 
@@ -487,6 +528,10 @@ class FootballSimulator:
                 return name
         return "Premier League"
 
+    # ------------------------------------------------
+    # UI
+    # ------------------------------------------------
+
     def build_ui(self):
         self.outer = tk.Frame(self.root, bg="#0f172a")
         self.outer.pack(fill="both", expand=True)
@@ -580,6 +625,9 @@ class FootballSimulator:
 
         self.prediction_label = tk.Label(self.header, text="Prediction: waiting", bg="#1e293b", fg="#ffd166", font=("Arial", 11, "bold"), wraplength=420, justify="left")
         self.prediction_label.pack(side="left", padx=10)
+
+        self.backend_indicator = tk.Label(self.header, text="● Checking backend", bg="#1e293b", fg="#facc15", font=("Arial", 10, "bold"))
+        self.backend_indicator.pack(side="left", padx=10)
 
         self.clock_label = tk.Label(self.header, text="00:00", bg="#1e293b", fg="white", font=("Arial", 20))
         self.clock_label.pack(side="right", padx=20)
