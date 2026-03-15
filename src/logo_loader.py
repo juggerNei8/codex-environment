@@ -98,3 +98,11 @@ class LogoLoader:
                     continue
 
         return None
+
+    def short_text_fallback(self, team: str) -> str:
+        words = [w for w in team.split() if w]
+        if not words:
+            return "?"
+        if len(words) == 1:
+            return words[0][:3].upper()
+        return "".join(w[0] for w in words[:3]).upper()
