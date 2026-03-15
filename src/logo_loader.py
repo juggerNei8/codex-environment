@@ -35,8 +35,6 @@ class LogoLoader:
             names.add(base.replace("United", "Utd"))
         if "Utd" in base:
             names.add(base.replace("Utd", "United"))
-        if "City" in base:
-            names.add(base.replace("City", "C"))
         if "Inter Milan" in base:
             names.add("Inter")
         if "Paris Saint-Germain" in base:
@@ -65,26 +63,35 @@ class LogoLoader:
 
         return candidates
 
-    def _load_photo(self, path: Path, small: bool):
+    def _load_photo(self, path: Path, size: str):
         img = tk.PhotoImage(file=str(path))
         w = max(1, img.width())
         h = max(1, img.height())
 
-        target = 28 if small else 44
-        sx = max(1, w // target)
-        sy = max(1, h // target)
+        target_px = {
+            "tiny": 20,
+            "small": 28,
+            "medium": 40,
+        }.get(size, 28)
+
+        sx = max(1, w // target_px)
+        sy = max(1, h // target_px)
 
         return img.subsample(sx, sy)
 
     def load(self, team: str, small: bool = False):
-        key = (team, small)
+        size = "small" if small else "medium"
+        return self.load_size(team, size=size)
+
+    def load_size(self, team: str, size: str = "small"):
+        key = (team, size)
         if key in self.cache:
             return self.cache[key]
 
         for path in self._candidate_paths(team):
             if path.exists():
                 try:
-                    img = self._load_photo(path, small)
+                    img = self._load_photo(path, size)
                     self.cache[key] = img
                     return img
                 except Exception:

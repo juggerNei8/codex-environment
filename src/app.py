@@ -20,7 +20,7 @@ from sim_integration.backend_client import SimulatorDataClient
 from sim_integration.tk_helpers import run_in_background
 
 
-APP_VERSION = "v1.0.7"
+APP_VERSION = "v1.0.8"
 APP_COPYRIGHT = "© 2026 JuggerNei8 Football Simulator"
 
 LEAGUE_OPTIONS = {
@@ -84,6 +84,9 @@ class FootballSimulator:
         self.tournament_odds = {}
         self.selected_fixture_odds = {}
 
+        self.home_sidebar_badge_img = None
+        self.away_sidebar_badge_img = None
+
         self.build_ui()
 
         self.engine = AnimationEngine(
@@ -94,7 +97,6 @@ class FootballSimulator:
             stats_callback=self.update_stats,
             timeline_callback=self.add_timeline_event,
         )
-
         self.engine.frame_ms = 16
 
         self.startup_backend_then_load()
@@ -195,6 +197,7 @@ class FootballSimulator:
 
         self.reload_selectors()
         self.reload_side_panels()
+        self.refresh_sidebar_badges()
 
         used = self.backend_usage.get("used")
         limit_ = self.backend_usage.get("limit")
@@ -258,21 +261,47 @@ class FootballSimulator:
             self.home_box.set(self.team_list[0])
             self.away_box.set(self.team_list[0])
 
+    def refresh_sidebar_badges(self):
+        home = self.home_box.get().strip()
+        away = self.away_box.get().strip()
+
+        self.home_sidebar_badge_img = self.logo_loader.load_size(home, "tiny") if home else None
+        self.away_sidebar_badge_img = self.logo_loader.load_size(away, "tiny") if away else None
+
+        if self.home_sidebar_badge_img:
+            self.home_badge_sidebar.config(image=self.home_sidebar_badge_img, text="")
+            self.home_badge_sidebar.image = self.home_sidebar_badge_img
+        else:
+            self.home_badge_sidebar.config(image="", text="No badge")
+
+        if self.away_sidebar_badge_img:
+            self.away_badge_sidebar.config(image=self.away_sidebar_badge_img, text="")
+            self.away_badge_sidebar.image = self.away_sidebar_badge_img
+        else:
+            self.away_badge_sidebar.config(image="", text="No badge")
+
     def _render_selected_odds(self):
+        self.odds_card_home_value.config(text="-")
+        self.odds_card_draw_value.config(text="-")
+        self.odds_card_away_value.config(text="-")
+        self.odds_card_match_label.config(text="Selected match odds unavailable")
+
         selected = self.selected_fixture_odds.get("selected", {}) if isinstance(self.selected_fixture_odds, dict) else {}
         if not isinstance(selected, dict) or not selected:
-            self.odds_box.insert("end", "Selected match odds: unavailable\n")
             return
 
-        self.odds_box.insert("end", "SELECTED MATCH ODDS\n")
-        self.odds_box.insert(
-            "end",
-            f"{selected.get('market','1X2')}  H:{selected.get('home','-')} D:{selected.get('draw','-')} A:{selected.get('away','-')}\n"
+        self.odds_card_match_label.config(
+            text=f"{self.home_box.get().strip()} vs {self.away_box.get().strip()}"
         )
+        self.odds_card_home_value.config(text=str(selected.get("home", "-")))
+        self.odds_card_draw_value.config(text=str(selected.get("draw", "-")))
+        self.odds_card_away_value.config(text=str(selected.get("away", "-")))
 
     def reload_side_panels(self):
         for box in (self.table_box, self.fixtures_box, self.live_box, self.odds_box, self.news_box):
             box.delete("1.0", "end")
+
+        self._render_selected_odds()
 
         if self.standings:
             for row in self.standings[:20]:
@@ -320,27 +349,38 @@ class FootballSimulator:
             self.live_box.insert("end", "No live games loaded yet.\n")
 
         self.odds_box.insert("end", "ODDS SUMMARY\n")
-        self._render_selected_odds()
 
         if isinstance(self.bet365_prematch, dict):
             summary = self.bet365_prematch.get("summary", {}) or {}
-            event_count = summary.get("event_count", 0)
-            self.odds_box.insert("end", f"Bet365 prematch events: {event_count}\n")
+            self.odds_box.insert("end", f"Bet365 prematch events: {summary.get('event_count', 0)}\n")
 
         if isinstance(self.odds_markets, dict):
-            market_count = self.odds_markets.get("market_count", 0)
-            self.odds_box.insert("end", f"Available markets: {market_count}\n")
+            self.odds_box.insert("end", f"Available markets: {self.odds_markets.get('market_count', 0)}\n")
 
         if isinstance(self.tournament_odds, dict):
             summary = self.tournament_odds.get("summary", {}) or {}
-            item_count = summary.get("item_count", 0)
-            self.odds_box.insert("end", f"Tournament odds items: {item_count}\n")
+            self.odds_box.insert("end", f"Tournament odds items: {summary.get('item_count', 0)}\n")
+
+        selected = self.selected_fixture_odds.get("selected", {}) if isinstance(self.selected_fixture_odds, dict) else {}
+        if isinstance(selected, dict) and selected:
+            self.odds_box.insert(
+                "end",
+                f"Selected 1X2: H:{selected.get('home','-')} D:{selected.get('draw','-')} A:{selected.get('away','-')}\n"
+            )
+        else:
+            self.odds_box.insert("end", "Selected 1X2: unavailable\n")
 
         if self.news_items:
             for row in self.news_items[:20]:
                 self.news_box.insert("end", f"{row.get('title','')}\n{row.get('summary','')}\n\n")
         else:
             self.news_box.insert("end", "No news loaded.\n")
+
+    def _league_name_from_code(self, code):
+        for name, value in LEAGUE_OPTIONS.items():
+            if value == code:
+                return name
+        return "Premier League"
 
     # ------------------------------------------------
     # UI
@@ -473,13 +513,21 @@ class FootballSimulator:
         self.league_box.bind("<<ComboboxSelected>>", self.on_league_changed)
 
         tk.Label(self.sidebar, text="Home Team", bg="#0b2545", fg="white").pack(pady=(16, 6))
-        self.home_box = ttk.Combobox(self.sidebar, values=self.team_list, height=20, state="normal")
-        self.home_box.pack(padx=12, fill="x")
+        home_row = tk.Frame(self.sidebar, bg="#0b2545")
+        home_row.pack(padx=12, fill="x")
+        self.home_badge_sidebar = tk.Label(home_row, bg="#0b2545", fg="white", width=8, anchor="w")
+        self.home_badge_sidebar.pack(side="left")
+        self.home_box = ttk.Combobox(home_row, values=self.team_list, height=20, state="normal")
+        self.home_box.pack(side="left", fill="x", expand=True)
         self.home_box.bind("<<ComboboxSelected>>", self.on_team_selection_changed)
 
         tk.Label(self.sidebar, text="Away Team", bg="#0b2545", fg="white").pack(pady=(16, 6))
-        self.away_box = ttk.Combobox(self.sidebar, values=self.team_list, height=20, state="normal")
-        self.away_box.pack(padx=12, fill="x")
+        away_row = tk.Frame(self.sidebar, bg="#0b2545")
+        away_row.pack(padx=12, fill="x")
+        self.away_badge_sidebar = tk.Label(away_row, bg="#0b2545", fg="white", width=8, anchor="w")
+        self.away_badge_sidebar.pack(side="left")
+        self.away_box = ttk.Combobox(away_row, values=self.team_list, height=20, state="normal")
+        self.away_box.pack(side="left", fill="x", expand=True)
         self.away_box.bind("<<ComboboxSelected>>", self.on_team_selection_changed)
 
         formation_values = ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2"]
@@ -511,12 +559,6 @@ class FootballSimulator:
         self.form_label = tk.Label(self.sidebar, text="Team form: waiting", bg="#0b2545", fg="#93c5fd", justify="left", wraplength=250)
         self.form_label.pack(pady=(8, 6), padx=12)
 
-    def _league_name_from_code(self, code):
-        for name, value in LEAGUE_OPTIONS.items():
-            if value == code:
-                return name
-        return "Premier League"
-
     def on_league_changed(self, _event=None):
         selected = self.league_box.get()
         code = LEAGUE_OPTIONS.get(selected, "PL")
@@ -525,6 +567,7 @@ class FootballSimulator:
         self.load_initial_data()
 
     def on_team_selection_changed(self, _event=None):
+        self.refresh_sidebar_badges()
         home = self.home_box.get().strip()
         away = self.away_box.get().strip()
         if home and away and home != away:
@@ -570,6 +613,34 @@ class FootballSimulator:
         self.right_canvas.pack(side="left", fill="both", expand=True)
         self.right_scroll.pack(side="right", fill="y")
 
+        self.odds_card = tk.LabelFrame(
+            self.right_inner,
+            text="Selected Match Odds",
+            bg="#0b2545",
+            fg="white",
+            padx=10,
+            pady=10
+        )
+        self.odds_card.pack(fill="x", padx=10, pady=(10, 8))
+
+        self.odds_card_match_label = tk.Label(
+            self.odds_card,
+            text="Selected match odds unavailable",
+            bg="#0b2545",
+            fg="#e2e8f0",
+            font=("Arial", 10, "bold"),
+            anchor="w",
+            justify="left"
+        )
+        self.odds_card_match_label.pack(fill="x", pady=(0, 8))
+
+        values_row = tk.Frame(self.odds_card, bg="#0b2545")
+        values_row.pack(fill="x")
+
+        self._build_odds_value_box(values_row, "HOME", "odds_card_home_value")
+        self._build_odds_value_box(values_row, "DRAW", "odds_card_draw_value")
+        self._build_odds_value_box(values_row, "AWAY", "odds_card_away_value")
+
         tk.Label(self.right_inner, text="Match Statistics", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
         self.stats_box = tk.Text(self.right_inner, height=8, width=44, bg="#091c34", fg="white")
         self.stats_box.pack(padx=10)
@@ -597,6 +668,15 @@ class FootballSimulator:
         tk.Label(self.right_inner, text="Club News", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
         self.news_box = tk.Text(self.right_inner, height=6, width=44, bg="#091c34", fg="white")
         self.news_box.pack(padx=10)
+
+    def _build_odds_value_box(self, parent, title, value_attr_name):
+        box = tk.Frame(parent, bg="#091c34", padx=10, pady=8)
+        box.pack(side="left", expand=True, fill="both", padx=4)
+
+        tk.Label(box, text=title, bg="#091c34", fg="#93c5fd", font=("Arial", 9, "bold")).pack()
+        value_label = tk.Label(box, text="-", bg="#091c34", fg="white", font=("Arial", 14, "bold"))
+        value_label.pack()
+        setattr(self, value_attr_name, value_label)
 
     def build_footer(self):
         footer = tk.Frame(self.match_page, bg="#020617")
@@ -674,7 +754,7 @@ class FootballSimulator:
         self.load_initial_data()
 
     # ------------------------------------------------
-    # HELPERS
+    # MATCH CONTROL
     # ------------------------------------------------
 
     def load_header_logos(self, home, away):
@@ -692,10 +772,6 @@ class FootballSimulator:
             self.away_logo_label.image = away_logo
         else:
             self.away_logo_label.config(image="", text="")
-
-    # ------------------------------------------------
-    # MATCH CONTROL
-    # ------------------------------------------------
 
     def start_match(self):
         home = self.home_box.get().strip()
