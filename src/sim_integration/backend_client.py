@@ -111,6 +111,9 @@ class SimulatorDataClient:
     def load_bet365_prematch(self) -> dict:
         return self.http.get_data("/api/odds/bet365-prematch") or {}
 
+    def load_selected_fixture_odds(self, home: str, away: str) -> dict:
+        return self.http.get_data("/api/odds/selected-fixture", params={"home": home, "away": away}) or {}
+
 
 def _fallback_compute_form_from_fixtures(fixtures: list[dict], *, team: str, competition: str) -> dict:
     finished = []
