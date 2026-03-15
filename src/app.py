@@ -20,7 +20,7 @@ from sim_integration.backend_client import SimulatorDataClient
 from sim_integration.tk_helpers import run_in_background
 
 
-APP_VERSION = "v1.0.8"
+APP_VERSION = "v1.0.9"
 APP_COPYRIGHT = "© 2026 JuggerNei8 Football Simulator"
 
 LEAGUE_OPTIONS = {
@@ -198,6 +198,7 @@ class FootballSimulator:
         self.reload_selectors()
         self.reload_side_panels()
         self.refresh_sidebar_badges()
+        self.refresh_match_detail_strip()
 
         used = self.backend_usage.get("used")
         limit_ = self.backend_usage.get("limit")
@@ -280,6 +281,14 @@ class FootballSimulator:
         else:
             self.away_badge_sidebar.config(image="", text="No badge")
 
+    def refresh_match_detail_strip(self):
+        home = self.home_box.get().strip() or "Home"
+        away = self.away_box.get().strip() or "Away"
+        self.match_detail_label.config(text=f"{home} vs {away} | League: {self.current_competition}")
+
+        odds_caption = self.prediction_engine.build_odds_caption(self.selected_fixture_odds)
+        self.odds_caption_label.config(text=odds_caption)
+
     def _render_selected_odds(self):
         self.odds_card_home_value.config(text="-")
         self.odds_card_draw_value.config(text="-")
@@ -288,6 +297,7 @@ class FootballSimulator:
 
         selected = self.selected_fixture_odds.get("selected", {}) if isinstance(self.selected_fixture_odds, dict) else {}
         if not isinstance(selected, dict) or not selected:
+            self.refresh_match_detail_strip()
             return
 
         self.odds_card_match_label.config(
@@ -296,6 +306,13 @@ class FootballSimulator:
         self.odds_card_home_value.config(text=str(selected.get("home", "-")))
         self.odds_card_draw_value.config(text=str(selected.get("draw", "-")))
         self.odds_card_away_value.config(text=str(selected.get("away", "-")))
+        self.refresh_match_detail_strip()
+
+    def _format_fixture_line(self, home: str, away: str, status: str) -> str:
+        return f"• {home} vs {away}   {status}"
+
+    def _format_live_line(self, home: str, away: str, sh, sa, minute: str, status: str) -> str:
+        return f"• {home} {sh}-{sa} {away}   {minute} {status}"
 
     def reload_side_panels(self):
         for box in (self.table_box, self.fixtures_box, self.live_box, self.odds_box, self.news_box):
@@ -311,7 +328,14 @@ class FootballSimulator:
 
         if self.fixtures:
             for row in self.fixtures[:20]:
-                self.fixtures_box.insert("end", f"{row.get('home','')} vs {row.get('away','')}  {row.get('status','')}\n")
+                self.fixtures_box.insert(
+                    "end",
+                    self._format_fixture_line(
+                        row.get("home", ""),
+                        row.get("away", ""),
+                        row.get("status", "")
+                    ) + "\n"
+                )
         else:
             self.fixtures_box.insert("end", "No fixtures loaded.\n")
 
@@ -323,20 +347,24 @@ class FootballSimulator:
             if live_matches:
                 self.live_box.insert("end", "LIVE MATCHES\n")
                 for m in live_matches[:12]:
-                    home = m.get("home", "")
-                    away = m.get("away", "")
-                    sh = m.get("score_home", "?")
-                    sa = m.get("score_away", "?")
-                    minute = m.get("minute", "")
-                    status = m.get("status", "LIVE")
-                    self.live_box.insert("end", f"{home} {sh}-{sa} {away}  {minute} {status}\n")
+                    self.live_box.insert(
+                        "end",
+                        self._format_live_line(
+                            m.get("home", ""),
+                            m.get("away", ""),
+                            m.get("score_home", "?"),
+                            m.get("score_away", "?"),
+                            str(m.get("minute", "")),
+                            str(m.get("status", "LIVE")),
+                        ) + "\n"
+                    )
 
             elif scheduled:
                 self.live_box.insert("end", "UPCOMING WITH ODDS\n")
                 for m in scheduled[:12]:
                     self.live_box.insert(
                         "end",
-                        f"{m.get('home','')} vs {m.get('away','')}  {m.get('status','')}  {m.get('start_time','')}\n"
+                        f"• {m.get('home','')} vs {m.get('away','')}   {m.get('status','')}   {m.get('start_time','')}\n"
                     )
             else:
                 self.live_box.insert("end", "No live games loaded yet.\n")
@@ -497,6 +525,30 @@ class FootballSimulator:
     def build_match_page(self):
         body = tk.Frame(self.match_page, bg="#0f172a")
         body.pack(fill="both", expand=True)
+
+        detail_strip = tk.Frame(self.match_page, bg="#111827")
+        detail_strip.pack(fill="x", pady=(0, 2))
+
+        self.match_detail_label = tk.Label(
+            detail_strip,
+            text="Home vs Away | League: PL",
+            bg="#111827",
+            fg="#e5e7eb",
+            font=("Arial", 10, "bold"),
+            anchor="w"
+        )
+        self.match_detail_label.pack(side="left", padx=10, pady=4)
+
+        self.odds_caption_label = tk.Label(
+            detail_strip,
+            text="Odds: unavailable",
+            bg="#111827",
+            fg="#93c5fd",
+            font=("Arial", 10),
+            anchor="e"
+        )
+        self.odds_caption_label.pack(side="right", padx=10, pady=4)
+
         self.build_sidebar(body)
         self.build_pitch(body)
         self.build_right_panel(body)
@@ -568,6 +620,8 @@ class FootballSimulator:
 
     def on_team_selection_changed(self, _event=None):
         self.refresh_sidebar_badges()
+        self.refresh_match_detail_strip()
+
         home = self.home_box.get().strip()
         away = self.away_box.get().strip()
         if home and away and home != away:
@@ -580,6 +634,7 @@ class FootballSimulator:
     def _on_selected_fixture_odds_loaded(self, data):
         self.selected_fixture_odds = data or {}
         self.reload_side_panels()
+        self.refresh_match_detail_strip()
 
     def build_pitch(self, parent):
         self.pitch_wrap = tk.Frame(parent, bg="#0f172a")
@@ -796,6 +851,7 @@ class FootballSimulator:
         self.home_name_label.config(text=home)
         self.away_name_label.config(text=away)
         self.load_header_logos(home, away)
+        self.refresh_match_detail_strip()
 
         self.home_score = 0
         self.away_score = 0
@@ -852,6 +908,7 @@ class FootballSimulator:
         )
 
         self.reload_side_panels()
+        self.refresh_match_detail_strip()
         self.status_label.config(text="Match started")
 
     def pause_match(self):
@@ -880,6 +937,7 @@ class FootballSimulator:
         self.form_label.config(text="Team form: waiting")
         self.status_label.config(text="Match reset")
         self.reload_side_panels()
+        self.refresh_match_detail_strip()
 
         self.add_commentary("Match reset.")
 

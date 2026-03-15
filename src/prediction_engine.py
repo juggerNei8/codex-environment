@@ -92,5 +92,19 @@ class PredictionEngine:
         draw_pct = max(8, 100 - home_pct - away_pct)
 
         note = f" [{' | '.join(note_parts)}]" if note_parts else ""
-
         return f"Prediction: {home} {home_pct}% | Draw {draw_pct}% | {away} {away_pct}%{note}"
+
+    def build_odds_caption(self, fixture_odds: dict | None) -> str:
+        if not fixture_odds or not isinstance(fixture_odds, dict):
+            return "Odds: unavailable"
+
+        selected = fixture_odds.get("selected")
+        if not isinstance(selected, dict) or not selected:
+            return "Odds: unavailable"
+
+        return (
+            f"Odds 1X2  "
+            f"H:{selected.get('home', '-')}  "
+            f"D:{selected.get('draw', '-')}  "
+            f"A:{selected.get('away', '-')}"
+        )
