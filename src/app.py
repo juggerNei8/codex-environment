@@ -20,7 +20,7 @@ from sim_integration.backend_client import SimulatorDataClient
 from sim_integration.tk_helpers import run_in_background
 
 
-APP_VERSION = "v1.0.9"
+APP_VERSION = "v1.1.0"
 APP_COPYRIGHT = "© 2026 JuggerNei8 Football Simulator"
 
 LEAGUE_OPTIONS = {
@@ -86,6 +86,8 @@ class FootballSimulator:
 
         self.home_sidebar_badge_img = None
         self.away_sidebar_badge_img = None
+        self.detail_home_badge_img = None
+        self.detail_away_badge_img = None
 
         self.build_ui()
 
@@ -284,10 +286,26 @@ class FootballSimulator:
     def refresh_match_detail_strip(self):
         home = self.home_box.get().strip() or "Home"
         away = self.away_box.get().strip() or "Away"
+
         self.match_detail_label.config(text=f"{home} vs {away} | League: {self.current_competition}")
 
         odds_caption = self.prediction_engine.build_odds_caption(self.selected_fixture_odds)
         self.odds_caption_label.config(text=odds_caption)
+
+        self.detail_home_badge_img = self.logo_loader.load_size(home, "tiny") if home else None
+        self.detail_away_badge_img = self.logo_loader.load_size(away, "tiny") if away else None
+
+        if self.detail_home_badge_img:
+            self.detail_home_badge.config(image=self.detail_home_badge_img, text="")
+            self.detail_home_badge.image = self.detail_home_badge_img
+        else:
+            self.detail_home_badge.config(image="", text="")
+
+        if self.detail_away_badge_img:
+            self.detail_away_badge.config(image=self.detail_away_badge_img, text="")
+            self.detail_away_badge.image = self.detail_away_badge_img
+        else:
+            self.detail_away_badge.config(image="", text="")
 
     def _render_selected_odds(self):
         self.odds_card_home_value.config(text="-")
@@ -308,6 +326,48 @@ class FootballSimulator:
         self.odds_card_away_value.config(text=str(selected.get("away", "-")))
         self.refresh_match_detail_strip()
 
+    def _team_priority_score(self, item_home: str, item_away: str, selected_home: str, selected_away: str) -> int:
+        score = 0
+        if selected_home and selected_home in (item_home, item_away):
+            score += 2
+        if selected_away and selected_away in (item_home, item_away):
+            score += 2
+        return score
+
+    def _selected_fixtures_first(self):
+        selected_home = self.home_box.get().strip()
+        selected_away = self.away_box.get().strip()
+
+        items = list(self.fixtures or [])
+        items.sort(
+            key=lambda r: (
+                -self._team_priority_score(r.get("home", ""), r.get("away", ""), selected_home, selected_away),
+                r.get("status", ""),
+                r.get("utcDate", ""),
+            )
+        )
+        return items
+
+    def _selected_live_first(self):
+        if not isinstance(self.live_games, dict):
+            return [], [], []
+
+        selected_home = self.home_box.get().strip()
+        selected_away = self.away_box.get().strip()
+
+        live_matches = list(self.live_games.get("live_matches", []) or [])
+        scheduled = list(self.live_games.get("scheduled_with_odds", []) or [])
+        errors = list(self.live_games.get("errors", []) or [])
+
+        live_matches.sort(
+            key=lambda m: -self._team_priority_score(m.get("home", ""), m.get("away", ""), selected_home, selected_away)
+        )
+        scheduled.sort(
+            key=lambda m: -self._team_priority_score(m.get("home", ""), m.get("away", ""), selected_home, selected_away)
+        )
+
+        return live_matches, scheduled, errors
+
     def _format_fixture_line(self, home: str, away: str, status: str) -> str:
         return f"• {home} vs {away}   {status}"
 
@@ -326,55 +386,59 @@ class FootballSimulator:
         else:
             self.table_box.insert("end", "No standings loaded.\n")
 
-        if self.fixtures:
-            for row in self.fixtures[:20]:
+        prioritized_fixtures = self._selected_fixtures_first()
+        if prioritized_fixtures:
+            selected_home = self.home_box.get().strip()
+            selected_away = self.away_box.get().strip()
+
+            self.fixtures_box.insert("end", "SELECTED TEAMS FIRST\n")
+            for row in prioritized_fixtures[:20]:
+                prefix = "★ " if self._team_priority_score(
+                    row.get("home", ""), row.get("away", ""), selected_home, selected_away
+                ) > 0 else "• "
                 self.fixtures_box.insert(
                     "end",
-                    self._format_fixture_line(
-                        row.get("home", ""),
-                        row.get("away", ""),
-                        row.get("status", "")
-                    ) + "\n"
+                    f"{prefix}{row.get('home','')} vs {row.get('away','')}   {row.get('status','')}\n"
                 )
         else:
             self.fixtures_box.insert("end", "No fixtures loaded.\n")
 
-        if isinstance(self.live_games, dict):
-            live_matches = self.live_games.get("live_matches", []) or []
-            scheduled = self.live_games.get("scheduled_with_odds", []) or []
-            errors = self.live_games.get("errors", []) or []
+        live_matches, scheduled, errors = self._selected_live_first()
 
-            if live_matches:
-                self.live_box.insert("end", "LIVE MATCHES\n")
-                for m in live_matches[:12]:
-                    self.live_box.insert(
-                        "end",
-                        self._format_live_line(
-                            m.get("home", ""),
-                            m.get("away", ""),
-                            m.get("score_home", "?"),
-                            m.get("score_away", "?"),
-                            str(m.get("minute", "")),
-                            str(m.get("status", "LIVE")),
-                        ) + "\n"
-                    )
+        if live_matches:
+            self.live_box.insert("end", "LIVE MATCHES\n")
+            selected_home = self.home_box.get().strip()
+            selected_away = self.away_box.get().strip()
 
-            elif scheduled:
-                self.live_box.insert("end", "UPCOMING WITH ODDS\n")
-                for m in scheduled[:12]:
-                    self.live_box.insert(
-                        "end",
-                        f"• {m.get('home','')} vs {m.get('away','')}   {m.get('status','')}   {m.get('start_time','')}\n"
-                    )
-            else:
-                self.live_box.insert("end", "No live games loaded yet.\n")
+            for m in live_matches[:12]:
+                prefix = "★ " if self._team_priority_score(
+                    m.get("home", ""), m.get("away", ""), selected_home, selected_away
+                ) > 0 else "• "
+                self.live_box.insert(
+                    "end",
+                    f"{prefix}{m.get('home','')} {m.get('score_home','?')}-{m.get('score_away','?')} {m.get('away','')}   {m.get('minute','')} {m.get('status','LIVE')}\n"
+                )
 
-            if errors:
-                self.live_box.insert("end", "\nErrors:\n")
-                for err in errors[:4]:
-                    self.live_box.insert("end", f"- {err}\n")
+        elif scheduled:
+            self.live_box.insert("end", "UPCOMING WITH ODDS\n")
+            selected_home = self.home_box.get().strip()
+            selected_away = self.away_box.get().strip()
+
+            for m in scheduled[:12]:
+                prefix = "★ " if self._team_priority_score(
+                    m.get("home", ""), m.get("away", ""), selected_home, selected_away
+                ) > 0 else "• "
+                self.live_box.insert(
+                    "end",
+                    f"{prefix}{m.get('home','')} vs {m.get('away','')}   {m.get('status','')}   {m.get('start_time','')}\n"
+                )
         else:
             self.live_box.insert("end", "No live games loaded yet.\n")
+
+        if errors:
+            self.live_box.insert("end", "\nErrors:\n")
+            for err in errors[:4]:
+                self.live_box.insert("end", f"- {err}\n")
 
         self.odds_box.insert("end", "ODDS SUMMARY\n")
 
@@ -529,6 +593,9 @@ class FootballSimulator:
         detail_strip = tk.Frame(self.match_page, bg="#111827")
         detail_strip.pack(fill="x", pady=(0, 2))
 
+        self.detail_home_badge = tk.Label(detail_strip, bg="#111827")
+        self.detail_home_badge.pack(side="left", padx=(8, 4), pady=4)
+
         self.match_detail_label = tk.Label(
             detail_strip,
             text="Home vs Away | League: PL",
@@ -537,7 +604,10 @@ class FootballSimulator:
             font=("Arial", 10, "bold"),
             anchor="w"
         )
-        self.match_detail_label.pack(side="left", padx=10, pady=4)
+        self.match_detail_label.pack(side="left", padx=6, pady=4)
+
+        self.detail_away_badge = tk.Label(detail_strip, bg="#111827")
+        self.detail_away_badge.pack(side="left", padx=(4, 8), pady=4)
 
         self.odds_caption_label = tk.Label(
             detail_strip,
