@@ -1,81 +1,99 @@
+from __future__ import annotations
+
 import os
+import subprocess
 import sys
 import time
-import subprocess
 from pathlib import Path
 
 import requests
 
+from logging_helper import get_logger
+
+
+logger = get_logger("backend_launcher", "backend_launcher.log")
+
 
 class BackendLauncher:
-    def __init__(self):
-        self.backend_base_url = os.getenv("BACKEND_BASE_URL", "http://127.0.0.1:8000")
-        self.health_url = self.backend_base_url.rstrip("/") + "/api/health"
-        self.backend_root = self._resolve_backend_root()
-        self.backend_process = None
+    def __init__(self) -> None:
+        self.backend_base_url = os.getenv("BACKEND_BASE_URL", "http://127.0.0.1:8001").rstrip("/")
+        self.backend_port = self._extract_port(self.backend_base_url)
+        self.backend_project_dir = Path(os.getenv("BACKEND_PROJECT_DIR", r"C:\Project X\football-gateway"))
+        self.backend_command = [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "app.main:app",
+            "--host",
+            "0.0.0.0",
+            "--port",
+            str(self.backend_port),
+        ]
+        self.process: subprocess.Popen | None = None
 
-    def _resolve_backend_root(self) -> Path:
-        src_dir = Path(__file__).resolve().parent
-        project_root = src_dir.parent
-        candidate = project_root.parent / "football-gateway"
-
-        if candidate.exists():
-            return candidate
-
-        env_path = os.getenv("BACKEND_ROOT", "").strip()
-        if env_path:
-            env_candidate = Path(env_path)
-            if env_candidate.exists():
-                return env_candidate
-
-        return candidate
-
-    def is_backend_running(self) -> bool:
+    def _extract_port(self, base_url: str) -> int:
         try:
-            r = requests.get(self.health_url, timeout=2.5)
+            return int(base_url.rsplit(":", 1)[-1])
+        except Exception:
+            return 8001
+
+    def health_url(self) -> str:
+        return f"{self.backend_base_url}/api/health"
+
+    def is_backend_running(self, timeout: float = 1.0) -> bool:
+        try:
+            r = requests.get(self.health_url(), timeout=timeout)
             return r.status_code == 200
         except Exception:
             return False
 
+    def wait_until_ready(self, retries: int = 20, delay: float = 1.0) -> bool:
+        for _ in range(retries):
+            if self.is_backend_running(timeout=1.5):
+                logger.info("Backend health check OK.")
+                return True
+            time.sleep(delay)
+        logger.warning("Backend did not become ready in time.")
+        return False
+
     def start_backend(self) -> bool:
         if self.is_backend_running():
+            logger.info("Backend already running.")
             return True
 
-        if not self.backend_root.exists():
-            raise RuntimeError(f"Backend root not found: {self.backend_root}")
+        if not self.backend_project_dir.exists():
+            logger.error("Backend project directory not found: %s", self.backend_project_dir)
+            return False
 
-        python_exe = sys.executable
-        env = os.environ.copy()
-        env["PYTHONUNBUFFERED"] = "1"
+        logger.info("Starting backend from %s", self.backend_project_dir)
 
-        creationflags = 0
-        if os.name == "nt":
-            creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
+        try:
+            logs_dir = Path(__file__).resolve().parent / "logs"
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            backend_log = open(logs_dir / "backend_runtime.log", "a", encoding="utf-8")
 
-        self.backend_process = subprocess.Popen(
-            [
-                python_exe,
-                "-m",
-                "uvicorn",
-                "app.main:app",
-                "--host",
-                "0.0.0.0",
-                "--port",
-                "8000",
-            ],
-            cwd=str(self.backend_root),
-            env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            creationflags=creationflags,
-        )
+            creationflags = 0
+            if os.name == "nt":
+                creationflags = subprocess.CREATE_NO_WINDOW
 
-        return self.wait_until_ready(timeout_seconds=25)
+            self.process = subprocess.Popen(
+                self.backend_command,
+                cwd=str(self.backend_project_dir),
+                stdout=backend_log,
+                stderr=backend_log,
+                creationflags=creationflags,
+            )
+        except Exception as e:
+            logger.exception("Failed to start backend: %s", e)
+            return False
 
-    def wait_until_ready(self, timeout_seconds: int = 25) -> bool:
-        start = time.time()
-        while time.time() - start < timeout_seconds:
-            if self.is_backend_running():
-                return True
-            time.sleep(1.0)
-        return False
+        return self.wait_until_ready()
+
+    def stop_backend(self) -> None:
+        if self.process and self.process.poll() is None:
+            logger.info("Stopping backend process.")
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=5)
+            except Exception:
+                self.process.kill()

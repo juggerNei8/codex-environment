@@ -1,21 +1,43 @@
-# src/build_exe.py
-import PyInstaller.__main__
+from __future__ import annotations
 
-PyInstaller.__main__.run([
-    '--name=soccer_simulator',
-    '--onefile',
-    '--windowed',
-    '--add-data=../database;database',
-    '--add-data=../assets;assets',
-    'app.py'
-])
-import PyInstaller.__main__
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
 
-PyInstaller.__main__.run([
-'--name=FootballSimulator',
-'--onefile',
-'--windowed',
-'--add-data=../database;database',
-'--add-data=../assets;assets',
-'app.py'
-])
+
+ROOT = Path(__file__).resolve().parent
+DIST = ROOT / "dist"
+BUILD = ROOT / "build"
+
+
+def main() -> int:
+    entry = ROOT / "run_simulator.py"
+    if not entry.exists():
+        print("run_simulator.py not found")
+        return 1
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "PyInstaller",
+        "--noconfirm",
+        "--clean",
+        "--windowed",
+        "--name",
+        "JuggerNei8Simulator",
+        str(entry),
+    ]
+
+    result = subprocess.run(cmd, cwd=str(ROOT))
+    if result.returncode != 0:
+        return result.returncode
+
+    print("EXE build complete.")
+    print(DIST / "JuggerNei8Simulator")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,6 +1,9 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
+from __future__ import annotations
+
 import os
+import random
+import tkinter as tk
+from tkinter import ttk, messagebox, filedialog
 
 os.environ.setdefault("SIMULATOR_TOKEN", "change_me_simulator_token")
 os.environ.setdefault("BACKEND_BASE_URL", "http://127.0.0.1:8001")
@@ -15,12 +18,15 @@ from logo_loader import LogoLoader
 from timeline_engine import TimelineEngine
 from backend_launcher import BackendLauncher
 from prediction_engine import PredictionEngine
+from logging_helper import get_logger
 
 from sim_integration.backend_client import SimulatorDataClient
 from sim_integration.tk_helpers import run_in_background
 
 
-APP_VERSION = "v1.1.3"
+logger = get_logger("simulator_app", "simulator_app.log")
+
+APP_VERSION = "v1.4.1"
 APP_COPYRIGHT = "© 2026 JuggerNei8 Football Simulator"
 
 LEAGUE_OPTIONS = {
@@ -36,33 +42,95 @@ LEAGUE_OPTIONS = {
     "Primeira Liga": "PPL",
 }
 
+FONT_FAMILIES = [
+    "Arial",
+    "Calibri",
+    "Verdana",
+    "Tahoma",
+    "Trebuchet MS",
+    "Georgia",
+    "Times New Roman",
+    "Courier New",
+]
+
+THEME_PRESETS = {
+    "Night Blue": {
+        "theme_bg": "#0b1020",
+        "card_bg": "#12182b",
+        "panel_bg": "#1a2137",
+        "text_fg": "#f8fafc",
+        "muted_fg": "#9aa9c3",
+        "accent": "#c026d3",
+        "accent2": "#60a5fa",
+        "pitch_bg": "#1f6f43",
+    },
+    "Broadcast Purple": {
+        "theme_bg": "#0a0817",
+        "card_bg": "#161327",
+        "panel_bg": "#201a37",
+        "text_fg": "#f8fafc",
+        "muted_fg": "#b4b2ca",
+        "accent": "#a855f7",
+        "accent2": "#38bdf8",
+        "pitch_bg": "#1d6d46",
+    },
+    "Slate Light": {
+        "theme_bg": "#dbe4ee",
+        "card_bg": "#f8fafc",
+        "panel_bg": "#cbd5e1",
+        "text_fg": "#0f172a",
+        "muted_fg": "#475569",
+        "accent": "#7c3aed",
+        "accent2": "#2563eb",
+        "pitch_bg": "#2e7d32",
+    },
+}
+
 
 class FootballSimulator:
-    def __init__(self, root):
+    def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Football Match Simulator")
-        self.root.geometry("1280x720")
-        self.root.minsize(1100, 650)
-        self.root.resizable(True, True)
-        self.root.configure(bg="#0f172a")
+        self.root.title("JuggerNei8 Football Simulator")
+        try:
+            self.root.state("zoomed")
+        except Exception:
+            self.root.geometry("1500x900")
+        self.root.minsize(1280, 760)
 
-        self.dark_mode = True
-        self.match_duration_seconds = 60
-        self.live_refresh_ms = 10 * 60 * 1000
         self.current_competition = os.getenv("DEFAULT_COMPETITION", "PL")
+        self.live_refresh_ms = 5 * 60 * 1000
+        self.match_duration_seconds = 60
+        self.fast_graphics = False
+        self.audio_enabled = True
+        self.backend_online = False
+        self.last_data_source = "unknown"
+        self.current_page = "live_match"
+        self.panel_filter = ""
+
+        self.font_family = "Arial"
+        self.header_font_size = 16
+        self.body_font_size = 10
+        self.score_font_size = 28
+
+        theme = THEME_PRESETS["Broadcast Purple"]
+        self.theme_bg = theme["theme_bg"]
+        self.card_bg = theme["card_bg"]
+        self.panel_bg = theme["panel_bg"]
+        self.text_fg = theme["text_fg"]
+        self.muted_fg = theme["muted_fg"]
+        self.accent = theme["accent"]
+        self.accent2 = theme["accent2"]
+        self.pitch_bg = theme["pitch_bg"]
+
+        self.main_background_path = ""
+        self.general_background_path = ""
+        self.pitch_background_path = ""
+        self.stadium_background_path = ""
 
         self.home_score = 0
         self.away_score = 0
         self.match_time = 0
         self.match_finished = False
-
-        self.audio_enabled = True
-        self.show_tracker_lines = True
-        self.show_player_labels = True
-        self.fast_graphics = False
-
-        self.backend_online = False
-        self.last_data_source = "unknown"
 
         self.audio = AudioEngine()
         self.commentary_engine = CommentaryEngine()
@@ -78,9 +146,6 @@ class FootballSimulator:
         self.fixtures = []
         self.standings = []
         self.news_items = []
-        self.logos = []
-        self.backend_usage = {}
-        self.export_status = {}
         self.live_games = {}
         self.odds_markets = {}
         self.bet365_prematch = {}
@@ -88,8 +153,9 @@ class FootballSimulator:
         self.selected_fixture_odds = {}
         self.home_form_data = {}
         self.away_form_data = {}
+        self.export_status = {}
+        self.backend_usage = {}
 
-        self.panel_filter = ""
         self.home_sidebar_badge_img = None
         self.away_sidebar_badge_img = None
         self.detail_home_badge_img = None
@@ -105,7 +171,7 @@ class FootballSimulator:
             stats_callback=self.update_stats,
             timeline_callback=self.add_timeline_event,
         )
-        self.engine.frame_ms = 16
+        self.engine.frame_ms = 12
 
         self.startup_backend_then_load()
         self.update_clock()
@@ -113,21 +179,764 @@ class FootballSimulator:
         self.schedule_live_refresh_loop()
 
     # ------------------------------------------------
-    # STARTUP / BACKEND
+    # UI SHELL
+    # ------------------------------------------------
+
+    def build_ui(self):
+        self.root.configure(bg=self.theme_bg)
+
+        self.main = tk.Frame(self.root, bg=self.theme_bg)
+        self.main.pack(fill="both", expand=True)
+
+        self.build_top_shell()
+        self.build_header_strip()
+        self.build_page_host()
+        self.build_pages()
+        self.apply_theme_to_widgets()
+        self.show_page("live_match")
+
+    def build_top_shell(self):
+        self.top_shell = tk.Frame(self.main, bg="#0a0f1d", height=56)
+        self.top_shell.pack(fill="x")
+        self.top_shell.pack_propagate(False)
+
+        left = tk.Frame(self.top_shell, bg="#0a0f1d")
+        left.pack(side="left", fill="y", padx=8)
+
+        mid = tk.Frame(self.top_shell, bg="#0a0f1d")
+        mid.pack(side="left", fill="both", expand=True)
+
+        right = tk.Frame(self.top_shell, bg="#0a0f1d")
+        right.pack(side="right", fill="y", padx=8)
+
+        self.app_title = tk.Label(
+            left,
+            text="JuggerNei8",
+            bg="#0a0f1d",
+            fg=self.text_fg,
+            font=(self.font_family, 15, "bold"),
+        )
+        self.app_title.pack(side="left", padx=(8, 18), pady=10)
+
+        nav_cfg = {"bg": "#0a0f1d", "fg": self.text_fg, "activebackground": "#161d31", "relief": "flat", "bd": 0}
+        self.nav_live = tk.Button(mid, text="Match Day", command=lambda: self.show_page("live_match"), **nav_cfg)
+        self.nav_post = tk.Button(mid, text="Report", command=lambda: self.show_page("post_match"), **nav_cfg)
+        self.nav_club = tk.Button(mid, text="Club", command=lambda: self.show_page("team_overview"), **nav_cfg)
+        self.nav_squad = tk.Button(mid, text="Squad", command=lambda: self.show_page("player_stats"), **nav_cfg)
+        self.nav_settings = tk.Button(mid, text="Settings", command=lambda: self.show_page("settings_home"), **nav_cfg)
+
+        for btn in [self.nav_live, self.nav_post, self.nav_club, self.nav_squad, self.nav_settings]:
+            btn.pack(side="left", padx=6, pady=8)
+
+        self.global_search = tk.Entry(
+            right,
+            bg="#161d31",
+            fg="white",
+            insertbackground="white",
+            relief="flat",
+            width=24,
+        )
+        self.global_search.pack(side="left", padx=6, pady=12)
+        self.global_search.insert(0, "Search")
+
+        self.clock_top = tk.Label(
+            right,
+            text="09:00",
+            bg="#0a0f1d",
+            fg=self.text_fg,
+            font=(self.font_family, 11, "bold"),
+        )
+        self.clock_top.pack(side="left", padx=10)
+
+    def build_header_strip(self):
+        self.header_strip = tk.Frame(self.main, bg=self.card_bg, height=82)
+        self.header_strip.pack(fill="x")
+        self.header_strip.pack_propagate(False)
+
+        left = tk.Frame(self.header_strip, bg=self.card_bg)
+        left.pack(side="left", fill="y", padx=10)
+
+        center = tk.Frame(self.header_strip, bg=self.card_bg)
+        center.pack(side="left", fill="both", expand=True)
+
+        right = tk.Frame(self.header_strip, bg=self.card_bg)
+        right.pack(side="right", fill="y", padx=12)
+
+        self.home_logo_label = tk.Label(left, bg=self.card_bg, fg=self.text_fg)
+        self.home_logo_label.pack(side="left", padx=(0, 6), pady=10)
+
+        self.home_name_label = tk.Label(
+            left,
+            text="HOME",
+            bg=self.card_bg,
+            fg=self.text_fg,
+            font=(self.font_family, self.header_font_size, "bold"),
+        )
+        self.home_name_label.pack(side="left", padx=4)
+
+        self.score_label = tk.Label(
+            center,
+            text="0 - 0",
+            bg=self.card_bg,
+            fg=self.text_fg,
+            font=(self.font_family, self.score_font_size, "bold"),
+        )
+        self.score_label.pack(side="left", padx=16, pady=8)
+
+        self.away_name_label = tk.Label(
+            center,
+            text="AWAY",
+            bg=self.card_bg,
+            fg=self.text_fg,
+            font=(self.font_family, self.header_font_size, "bold"),
+        )
+        self.away_name_label.pack(side="left", padx=4)
+
+        self.away_logo_label = tk.Label(center, bg=self.card_bg, fg=self.text_fg)
+        self.away_logo_label.pack(side="left", padx=(6, 16), pady=10)
+
+        self.prediction_label = tk.Label(
+            center,
+            text="Prediction: waiting",
+            bg=self.card_bg,
+            fg="#ffd166",
+            font=(self.font_family, self.body_font_size + 1, "bold"),
+            wraplength=520,
+            justify="left",
+        )
+        self.prediction_label.pack(side="left", padx=10)
+
+        self.backend_indicator = tk.Label(
+            right,
+            text="● Checking backend",
+            bg=self.card_bg,
+            fg="#facc15",
+            font=(self.font_family, self.body_font_size, "bold"),
+        )
+        self.backend_indicator.pack(anchor="e", pady=(10, 4))
+
+        self.clock_label = tk.Label(
+            right,
+            text="00:00",
+            bg=self.card_bg,
+            fg=self.text_fg,
+            font=(self.font_family, self.header_font_size + 4, "bold"),
+        )
+        self.clock_label.pack(anchor="e")
+
+        self.possession_label = tk.Label(
+            right,
+            text="Possession 50% - 50%",
+            bg=self.card_bg,
+            fg=self.text_fg,
+            font=(self.font_family, self.body_font_size),
+        )
+        self.possession_label.pack(anchor="e", pady=(4, 0))
+
+    def build_page_host(self):
+        self.page_host = tk.Frame(self.main, bg=self.theme_bg)
+        self.page_host.pack(fill="both", expand=True)
+
+    def build_pages(self):
+        self.pages = {}
+
+        for name in [
+            "live_match",
+            "post_match",
+            "team_overview",
+            "player_stats",
+            "settings_home",
+            "personalization",
+        ]:
+            frame = tk.Frame(self.page_host, bg=self.theme_bg)
+            self.pages[name] = frame
+
+        self.build_live_match_page()
+        self.build_post_match_page()
+        self.build_team_overview_page()
+        self.build_player_stats_page()
+        self.build_settings_home_page()
+        self.build_personalization_page()
+
+    def show_page(self, page_name: str):
+        for frame in self.pages.values():
+            frame.pack_forget()
+
+        self.current_page = page_name
+        self.pages[page_name].pack(fill="both", expand=True)
+        self.highlight_nav()
+
+    def highlight_nav(self):
+        nav_map = {
+            "live_match": self.nav_live,
+            "post_match": self.nav_post,
+            "team_overview": self.nav_club,
+            "player_stats": self.nav_squad,
+            "settings_home": self.nav_settings,
+            "personalization": self.nav_settings,
+        }
+        for btn in [self.nav_live, self.nav_post, self.nav_club, self.nav_squad, self.nav_settings]:
+            btn.configure(bg="#0a0f1d")
+        current = nav_map.get(self.current_page)
+        if current:
+            current.configure(bg="#1a2137")
+
+    def make_card(self, parent, title: str):
+        card = tk.LabelFrame(parent, text=title, bg=self.card_bg, fg=self.text_fg, bd=1, padx=10, pady=10)
+        return card
+
+    # ------------------------------------------------
+    # LIVE MATCH PAGE
+    # ------------------------------------------------
+
+    def build_live_match_page(self):
+        page = self.pages["live_match"]
+
+        top = tk.Frame(page, bg=self.theme_bg)
+        top.pack(fill="x", padx=10, pady=(10, 6))
+
+        self.live_detail_label = tk.Label(
+            top,
+            text="Live Match Dashboard",
+            bg=self.theme_bg,
+            fg=self.text_fg,
+            font=(self.font_family, 18, "bold"),
+        )
+        self.live_detail_label.pack(side="left")
+
+        self.live_page_status = tk.Label(
+            top,
+            text="Broadcast view",
+            bg=self.theme_bg,
+            fg=self.accent,
+            font=(self.font_family, self.body_font_size, "bold"),
+        )
+        self.live_page_status.pack(side="right")
+
+        body = tk.Frame(page, bg=self.theme_bg)
+        body.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        self.live_left = tk.Frame(body, bg=self.theme_bg, width=310)
+        self.live_left.pack(side="left", fill="y", padx=(0, 6))
+        self.live_left.pack_propagate(False)
+
+        self.live_center = tk.Frame(body, bg=self.theme_bg)
+        self.live_center.pack(side="left", fill="both", expand=True, padx=6)
+
+        self.live_right = tk.Frame(body, bg=self.theme_bg, width=360)
+        self.live_right.pack(side="right", fill="y", padx=(6, 0))
+        self.live_right.pack_propagate(False)
+
+        self.build_live_left_column()
+        self.build_live_center_column()
+        self.build_live_right_column()
+
+    def build_live_left_column(self):
+        card = self.make_card(self.live_left, "Match Controls")
+        card.pack(fill="x", pady=(0, 8))
+
+        tk.Label(card, text="League", bg=self.card_bg, fg=self.text_fg).pack(anchor="w")
+        self.league_box = ttk.Combobox(card, values=list(LEAGUE_OPTIONS.keys()), state="readonly")
+        self.league_box.pack(fill="x", pady=(2, 8))
+        self.league_box.set(self._league_name_from_code(self.current_competition))
+        self.league_box.bind("<<ComboboxSelected>>", self.on_league_changed)
+
+        home_row = tk.Frame(card, bg=self.card_bg)
+        home_row.pack(fill="x", pady=3)
+        tk.Label(home_row, text="Home", bg=self.card_bg, fg=self.text_fg, width=8, anchor="w").pack(side="left")
+        self.home_box = ttk.Combobox(home_row, values=self.team_list, state="normal")
+        self.home_box.pack(side="left", fill="x", expand=True)
+        self.home_box.bind("<<ComboboxSelected>>", self.on_team_selection_changed)
+
+        away_row = tk.Frame(card, bg=self.card_bg)
+        away_row.pack(fill="x", pady=3)
+        tk.Label(away_row, text="Away", bg=self.card_bg, fg=self.text_fg, width=8, anchor="w").pack(side="left")
+        self.away_box = ttk.Combobox(away_row, values=self.team_list, state="normal")
+        self.away_box.pack(side="left", fill="x", expand=True)
+        self.away_box.bind("<<ComboboxSelected>>", self.on_team_selection_changed)
+
+        tk.Label(card, text="Home Formation", bg=self.card_bg, fg=self.text_fg).pack(anchor="w", pady=(8, 0))
+        self.home_formation_box = ttk.Combobox(card, values=["4-3-3", "4-2-3-1", "4-4-2", "3-5-2"], state="readonly")
+        self.home_formation_box.pack(fill="x", pady=(2, 6))
+        self.home_formation_box.set("4-3-3")
+
+        tk.Label(card, text="Away Formation", bg=self.card_bg, fg=self.text_fg).pack(anchor="w")
+        self.away_formation_box = ttk.Combobox(card, values=["4-3-3", "4-2-3-1", "4-4-2", "3-5-2"], state="readonly")
+        self.away_formation_box.pack(fill="x", pady=(2, 8))
+        self.away_formation_box.set("4-2-3-1")
+
+        btn_cfg = {"bg": self.accent, "fg": "white", "relief": "flat", "activebackground": self.accent}
+        tk.Button(card, text="Start Match", command=self.start_match, **btn_cfg).pack(fill="x", pady=3)
+        tk.Button(card, text="Pause Match", command=self.pause_match, **btn_cfg).pack(fill="x", pady=3)
+        tk.Button(card, text="Reset Match", command=self.reset_match, **btn_cfg).pack(fill="x", pady=3)
+        tk.Button(card, text="Refresh Data", command=self.load_initial_data, **btn_cfg).pack(fill="x", pady=3)
+        tk.Button(card, text="Settings", command=lambda: self.show_page("settings_home"), **btn_cfg).pack(fill="x", pady=3)
+
+        info_card = self.make_card(self.live_left, "Live Notes")
+        info_card.pack(fill="both", expand=True)
+
+        self.tactic_label = tk.Label(
+            info_card,
+            text="Live tactics: waiting",
+            bg=self.card_bg,
+            fg="#cbd5e1",
+            justify="left",
+            wraplength=250,
+            anchor="nw",
+        )
+        self.tactic_label.pack(fill="x", pady=4)
+
+        self.form_label = tk.Label(
+            info_card,
+            text="Team form: waiting",
+            bg=self.card_bg,
+            fg="#93c5fd",
+            justify="left",
+            wraplength=250,
+            anchor="nw",
+        )
+        self.form_label.pack(fill="x", pady=4)
+
+        self.commentary_box = tk.Text(info_card, height=16, bg="#09111f", fg="white", relief="flat", wrap="word")
+        self.commentary_box.pack(fill="both", expand=True, pady=(8, 0))
+
+    def build_live_center_column(self):
+        score_card = self.make_card(self.live_center, "Live Match")
+        score_card.pack(fill="x", pady=(0, 8))
+
+        self.live_match_detail = tk.Label(
+            score_card,
+            text="Home vs Away | 00:00",
+            bg=self.card_bg,
+            fg=self.text_fg,
+            font=(self.font_family, 13, "bold"),
+        )
+        self.live_match_detail.pack(anchor="w")
+
+        self.canvas = tk.Canvas(
+            self.live_center,
+            bg=self.pitch_bg,
+            highlightthickness=0,
+            cursor="crosshair",
+            height=420,
+        )
+        self.canvas.pack(fill="both", expand=True, pady=(0, 8))
+
+        bottom_row = tk.Frame(self.live_center, bg=self.theme_bg)
+        bottom_row.pack(fill="x")
+
+        stats_card = self.make_card(bottom_row, "Match Stats")
+        stats_card.pack(side="left", fill="both", expand=True, padx=(0, 4))
+        self.stats_box = tk.Text(stats_card, height=10, bg="#09111f", fg="white", relief="flat", wrap="word")
+        self.stats_box.pack(fill="both", expand=True)
+
+        timeline_card = self.make_card(bottom_row, "Match Events")
+        timeline_card.pack(side="left", fill="both", expand=True, padx=(4, 0))
+        self.timeline_box = tk.Text(timeline_card, height=10, bg="#09111f", fg="white", relief="flat", wrap="word")
+        self.timeline_box.pack(fill="both", expand=True)
+
+    def build_live_right_column(self):
+        compare = self.make_card(self.live_right, "Comparison")
+        compare.pack(fill="x", pady=(0, 8))
+
+        self.compare_title = tk.Label(compare, text="Home vs Away", bg=self.card_bg, fg=self.text_fg, font=(self.font_family, 11, "bold"))
+        self.compare_title.pack(anchor="w")
+
+        self.compare_record_label = tk.Label(compare, text="Wins recent: -", bg=self.card_bg, fg=self.text_fg)
+        self.compare_record_label.pack(anchor="w", pady=(6, 2))
+
+        self.wins_bar = tk.Canvas(compare, height=18, bg="#09111f", highlightthickness=0)
+        self.wins_bar.pack(fill="x", pady=(0, 6))
+
+        self.compare_goals_label = tk.Label(compare, text="Goals recent: -", bg=self.card_bg, fg=self.text_fg)
+        self.compare_goals_label.pack(anchor="w", pady=(2, 2))
+
+        self.goals_bar = tk.Canvas(compare, height=18, bg="#09111f", highlightthickness=0)
+        self.goals_bar.pack(fill="x")
+
+        odds_card = self.make_card(self.live_right, "Selected Match Odds")
+        odds_card.pack(fill="x", pady=(0, 8))
+
+        odds_row = tk.Frame(odds_card, bg=self.card_bg)
+        odds_row.pack(fill="x")
+        self.odds_card_home_value = self._make_odds_box(odds_row, "HOME")
+        self.odds_card_draw_value = self._make_odds_box(odds_row, "DRAW")
+        self.odds_card_away_value = self._make_odds_box(odds_row, "AWAY")
+
+        self.live_box = self._make_text_panel(self.live_right, "Live Games", 9)
+        self.table_box = self._make_text_panel(self.live_right, "Live Table", 9)
+
+    # ------------------------------------------------
+    # POST MATCH PAGE
+    # ------------------------------------------------
+
+    def build_post_match_page(self):
+        page = self.pages["post_match"]
+
+        title = tk.Label(
+            page,
+            text="Post Match Report",
+            bg=self.theme_bg,
+            fg=self.text_fg,
+            font=(self.font_family, 18, "bold"),
+        )
+        title.pack(anchor="w", padx=10, pady=(10, 6))
+
+        top = tk.Frame(page, bg=self.theme_bg)
+        top.pack(fill="x", padx=10, pady=(0, 8))
+
+        self.post_score_banner = tk.Label(
+            top,
+            text="Home 0 - 0 Away",
+            bg=self.card_bg,
+            fg=self.text_fg,
+            font=(self.font_family, 20, "bold"),
+            pady=16,
+        )
+        self.post_score_banner.pack(fill="x")
+
+        body = tk.Frame(page, bg=self.theme_bg)
+        body.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        left = tk.Frame(body, bg=self.theme_bg, width=300)
+        left.pack(side="left", fill="y", padx=(0, 6))
+        left.pack_propagate(False)
+
+        center = tk.Frame(body, bg=self.theme_bg)
+        center.pack(side="left", fill="both", expand=True, padx=6)
+
+        right = tk.Frame(body, bg=self.theme_bg, width=320)
+        right.pack(side="right", fill="y", padx=(6, 0))
+        right.pack_propagate(False)
+
+        self.report_home_box = self._make_text_panel(left, "Home Ratings", 18)
+        self.report_away_box = self._make_text_panel(right, "Away Ratings", 18)
+
+        self.post_events_box = self._make_text_panel(center, "Match Events", 10)
+        self.post_stats_box = self._make_text_panel(center, "Match Statistics", 10)
+        self.post_latest_box = self._make_text_panel(right, "Latest Scores", 8)
+        self.post_table_box = self._make_text_panel(right, "League Table", 8)
+
+    # ------------------------------------------------
+    # TEAM OVERVIEW PAGE
+    # ------------------------------------------------
+
+    def build_team_overview_page(self):
+        page = self.pages["team_overview"]
+
+        header = tk.Label(
+            page,
+            text="Team Overview",
+            bg=self.theme_bg,
+            fg=self.text_fg,
+            font=(self.font_family, 18, "bold"),
+        )
+        header.pack(anchor="w", padx=10, pady=(10, 6))
+
+        top = tk.Frame(page, bg=self.theme_bg)
+        top.pack(fill="x", padx=10, pady=(0, 8))
+
+        self.team_overview_head = tk.Label(
+            top,
+            text="Club overview page",
+            bg=self.card_bg,
+            fg=self.text_fg,
+            font=(self.font_family, 16, "bold"),
+            pady=14,
+        )
+        self.team_overview_head.pack(fill="x")
+
+        body = tk.Frame(page, bg=self.theme_bg)
+        body.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        left = tk.Frame(body, bg=self.theme_bg, width=310)
+        left.pack(side="left", fill="y", padx=(0, 6))
+        left.pack_propagate(False)
+
+        center = tk.Frame(body, bg=self.theme_bg)
+        center.pack(side="left", fill="both", expand=True, padx=6)
+
+        right = tk.Frame(body, bg=self.theme_bg, width=320)
+        right.pack(side="right", fill="y", padx=(6, 0))
+        right.pack_propagate(False)
+
+        self.club_staff_box = self._make_text_panel(left, "Staff / Team Snapshot", 14)
+        self.club_history_box = self._make_text_panel(left, "Club History", 10)
+
+        self.club_fixtures_box = self._make_text_panel(center, "Fixtures and Results", 14)
+        self.club_graph_box = self._make_text_panel(center, "Club History Graph Data", 10)
+
+        self.club_player_stats_box = self._make_text_panel(right, "Player Stats", 10)
+        self.club_tactical_box = self._make_text_panel(right, "Tactical Profile", 8)
+        self.club_transfer_box = self._make_text_panel(right, "Transfer History", 8)
+
+    # ------------------------------------------------
+    # PLAYER STATS PAGE
+    # ------------------------------------------------
+
+    def build_player_stats_page(self):
+        page = self.pages["player_stats"]
+
+        header = tk.Label(
+            page,
+            text="Player / Staff Stats",
+            bg=self.theme_bg,
+            fg=self.text_fg,
+            font=(self.font_family, 18, "bold"),
+        )
+        header.pack(anchor="w", padx=10, pady=(10, 6))
+
+        self.player_head = tk.Label(
+            page,
+            text="Player profile and attributes",
+            bg=self.card_bg,
+            fg=self.text_fg,
+            font=(self.font_family, 16, "bold"),
+            pady=14,
+        )
+        self.player_head.pack(fill="x", padx=10, pady=(0, 8))
+
+        body = tk.Frame(page, bg=self.theme_bg)
+        body.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        left = tk.Frame(body, bg=self.theme_bg, width=250)
+        left.pack(side="left", fill="y", padx=(0, 6))
+        left.pack_propagate(False)
+
+        center = tk.Frame(body, bg=self.theme_bg)
+        center.pack(side="left", fill="both", expand=True, padx=6)
+
+        right = tk.Frame(body, bg=self.theme_bg, width=300)
+        right.pack(side="right", fill="y", padx=(6, 0))
+        right.pack_propagate(False)
+
+        self.player_role_box = self._make_text_panel(left, "Position / Role", 10)
+        self.player_left_meta_box = self._make_text_panel(left, "Player Form / Happiness", 10)
+
+        self.player_attributes_box = self._make_text_panel(center, "Attributes Overview", 22)
+
+        self.player_info_box = self._make_text_panel(right, "Info", 8)
+        self.player_season_box = self._make_text_panel(right, "Season Stats", 8)
+        self.player_career_box = self._make_text_panel(right, "Career Stats", 8)
+
+    # ------------------------------------------------
+    # SETTINGS PAGES
+    # ------------------------------------------------
+
+    def build_settings_home_page(self):
+        page = self.pages["settings_home"]
+
+        title = tk.Label(
+            page,
+            text="Settings",
+            bg=self.theme_bg,
+            fg=self.text_fg,
+            font=(self.font_family, 18, "bold"),
+        )
+        title.pack(anchor="w", padx=10, pady=(10, 6))
+
+        card = self.make_card(page, "Match View / System")
+        card.pack(fill="x", padx=10, pady=(0, 8))
+
+        tk.Label(
+            card,
+            text="Choose camera style, graphics quality, match sounds, and personalization.",
+            bg=self.card_bg,
+            fg=self.text_fg,
+            justify="left",
+        ).pack(anchor="w", pady=(0, 10))
+
+        tk.Button(card, text="Personalization", command=lambda: self.show_page("personalization"), bg=self.accent, fg="white", relief="flat").pack(fill="x", pady=4)
+        tk.Button(card, text="High Refresh", command=lambda: self.set_refresh_quality("high"), bg=self.accent, fg="white", relief="flat").pack(fill="x", pady=4)
+        tk.Button(card, text="Balanced Refresh", command=lambda: self.set_refresh_quality("balanced"), bg=self.accent, fg="white", relief="flat").pack(fill="x", pady=4)
+        tk.Button(card, text="Saver Refresh", command=lambda: self.set_refresh_quality("saver"), bg=self.accent, fg="white", relief="flat").pack(fill="x", pady=4)
+        tk.Button(card, text="Mute / Unmute", command=self.toggle_mute, bg=self.accent, fg="white", relief="flat").pack(fill="x", pady=4)
+
+        note = self.make_card(page, "Design Note")
+        note.pack(fill="x", padx=10, pady=(0, 10))
+        tk.Label(
+            note,
+            text="This settings page is the parent page. Personalization is nested under Settings.",
+            bg=self.card_bg,
+            fg=self.accent2,
+            justify="left",
+        ).pack(anchor="w")
+
+    def build_personalization_page(self):
+        page = self.pages["personalization"]
+
+        title = tk.Label(
+            page,
+            text="Settings > Personalization",
+            bg=self.theme_bg,
+            fg=self.text_fg,
+            font=(self.font_family, 18, "bold"),
+        )
+        title.pack(anchor="w", padx=10, pady=(10, 6))
+
+        body = tk.Frame(page, bg=self.theme_bg)
+        body.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        left = tk.Frame(body, bg=self.theme_bg, width=360)
+        left.pack(side="left", fill="y", padx=(0, 6))
+        left.pack_propagate(False)
+
+        center = tk.Frame(body, bg=self.theme_bg)
+        center.pack(side="left", fill="both", expand=True, padx=6)
+
+        right = tk.Frame(body, bg=self.theme_bg, width=260)
+        right.pack(side="right", fill="y", padx=(6, 0))
+        right.pack_propagate(False)
+
+        fonts_card = self.make_card(left, "Fonts")
+        fonts_card.pack(fill="x", pady=(0, 8))
+
+        tk.Label(fonts_card, text="Font family", bg=self.card_bg, fg=self.text_fg).grid(row=0, column=0, sticky="w", pady=4)
+        self.font_family_box = ttk.Combobox(fonts_card, values=FONT_FAMILIES, state="readonly")
+        self.font_family_box.grid(row=0, column=1, sticky="ew", pady=4, padx=6)
+        self.font_family_box.set(self.font_family)
+
+        tk.Label(fonts_card, text="Header size", bg=self.card_bg, fg=self.text_fg).grid(row=1, column=0, sticky="w", pady=4)
+        self.header_size_spin = tk.Spinbox(fonts_card, from_=12, to=28, width=10)
+        self.header_size_spin.grid(row=1, column=1, sticky="w", pady=4, padx=6)
+        self.header_size_spin.delete(0, "end")
+        self.header_size_spin.insert(0, str(self.header_font_size))
+
+        tk.Label(fonts_card, text="Body size", bg=self.card_bg, fg=self.text_fg).grid(row=2, column=0, sticky="w", pady=4)
+        self.body_size_spin = tk.Spinbox(fonts_card, from_=8, to=20, width=10)
+        self.body_size_spin.grid(row=2, column=1, sticky="w", pady=4, padx=6)
+        self.body_size_spin.delete(0, "end")
+        self.body_size_spin.insert(0, str(self.body_font_size))
+
+        tk.Label(fonts_card, text="Score size", bg=self.card_bg, fg=self.text_fg).grid(row=3, column=0, sticky="w", pady=4)
+        self.score_size_spin = tk.Spinbox(fonts_card, from_=20, to=48, width=10)
+        self.score_size_spin.grid(row=3, column=1, sticky="w", pady=4, padx=6)
+        self.score_size_spin.delete(0, "end")
+        self.score_size_spin.insert(0, str(self.score_font_size))
+
+        fonts_card.columnconfigure(1, weight=1)
+
+        theme_card = self.make_card(center, "Themes and Colors")
+        theme_card.pack(fill="x", pady=(0, 8))
+
+        tk.Label(theme_card, text="Preset theme", bg=self.card_bg, fg=self.text_fg).grid(row=0, column=0, sticky="w", pady=4)
+        self.theme_box = ttk.Combobox(theme_card, values=list(THEME_PRESETS.keys()), state="readonly")
+        self.theme_box.grid(row=0, column=1, sticky="ew", pady=4, padx=6)
+        self.theme_box.set("Broadcast Purple")
+
+        tk.Label(theme_card, text="Pitch color", bg=self.card_bg, fg=self.text_fg).grid(row=1, column=0, sticky="w", pady=4)
+        self.pitch_color_box = ttk.Combobox(theme_card, values=["#2e7d32", "#1f8f46", "#3f9c35", "#245b2a", "#4caf50"], state="readonly")
+        self.pitch_color_box.grid(row=1, column=1, sticky="ew", pady=4, padx=6)
+        self.pitch_color_box.set(self.pitch_bg)
+
+        theme_card.columnconfigure(1, weight=1)
+
+        bg_card = self.make_card(center, "Backgrounds")
+        bg_card.pack(fill="x", pady=(0, 8))
+
+        self.main_bg_label = tk.Label(bg_card, text="Main image: not set", bg=self.card_bg, fg=self.text_fg, anchor="w")
+        self.main_bg_label.pack(fill="x", pady=3)
+        tk.Button(bg_card, text="Choose Main Background", command=lambda: self.choose_background("main"), bg=self.accent, fg="white", relief="flat").pack(fill="x", pady=2)
+
+        self.general_bg_label = tk.Label(bg_card, text="General image: not set", bg=self.card_bg, fg=self.text_fg, anchor="w")
+        self.general_bg_label.pack(fill="x", pady=3)
+        tk.Button(bg_card, text="Choose General Background", command=lambda: self.choose_background("general"), bg=self.accent, fg="white", relief="flat").pack(fill="x", pady=2)
+
+        self.pitch_bg_label = tk.Label(bg_card, text="Pitch image: not set", bg=self.card_bg, fg=self.text_fg, anchor="w")
+        self.pitch_bg_label.pack(fill="x", pady=3)
+        tk.Button(bg_card, text="Choose Pitch Background", command=lambda: self.choose_background("pitch"), bg=self.accent, fg="white", relief="flat").pack(fill="x", pady=2)
+
+        self.stadium_bg_label = tk.Label(bg_card, text="Stadium image: not set", bg=self.card_bg, fg=self.text_fg, anchor="w")
+        self.stadium_bg_label.pack(fill="x", pady=3)
+        tk.Button(bg_card, text="Choose Stadium Background", command=lambda: self.choose_background("stadium"), bg=self.accent, fg="white", relief="flat").pack(fill="x", pady=2)
+
+        side_card = self.make_card(right, "Actions")
+        side_card.pack(fill="x")
+
+        tk.Button(side_card, text="OK", command=self.apply_personalization_settings, bg=self.accent, fg="white", relief="flat").pack(fill="x", pady=4)
+        tk.Button(side_card, text="Back", command=lambda: self.show_page("settings_home"), bg=self.accent2, fg="white", relief="flat").pack(fill="x", pady=4)
+
+        tk.Label(
+            side_card,
+            text="Recommended background folder:\nC:\\Project X\\codex-environment-main\\src\\assets\\backgrounds\\",
+            bg=self.card_bg,
+            fg=self.accent2,
+            justify="left",
+        ).pack(anchor="w", pady=(10, 0))
+
+    # ------------------------------------------------
+    # WIDGET BUILD HELPERS
+    # ------------------------------------------------
+
+    def _make_odds_box(self, parent, title):
+        box = tk.Frame(parent, bg="#09111f", padx=10, pady=8)
+        box.pack(side="left", expand=True, fill="both", padx=4)
+        tk.Label(box, text=title, bg="#09111f", fg=self.accent2, font=(self.font_family, self.body_font_size - 1, "bold")).pack()
+        value_label = tk.Label(box, text="-", bg="#09111f", fg="white", font=(self.font_family, self.body_font_size + 4, "bold"))
+        value_label.pack()
+        return value_label
+
+    def _make_text_panel(self, parent, title, height):
+        wrap = self.make_card(parent, title)
+        wrap.pack(fill="x", pady=4)
+        box = tk.Text(wrap, height=height, bg="#09111f", fg="white", relief="flat", wrap="word")
+        box.pack(fill="x")
+        return box
+
+    # ------------------------------------------------
+    # SAFE CALLBACKS
+    # ------------------------------------------------
+
+    def add_commentary(self, text):
+        if hasattr(self, "commentary_box"):
+            self.commentary_box.insert("end", text + "\n")
+            self.commentary_box.see("end")
+
+    def update_stats(self, stats):
+        if not hasattr(self, "stats_box"):
+            return
+        self.stats_box.delete("1.0", "end")
+        self.stats_box.insert("end", f"Home Shots: {stats.get('home_shots', 0)}\n")
+        self.stats_box.insert("end", f"Away Shots: {stats.get('away_shots', 0)}\n")
+        self.stats_box.insert("end", f"Home On Target: {stats.get('home_on_target', 0)}\n")
+        self.stats_box.insert("end", f"Away On Target: {stats.get('away_on_target', 0)}\n")
+        self.stats_box.insert("end", f"Home Passes: {stats.get('home_passes', 0)}\n")
+        self.stats_box.insert("end", f"Away Passes: {stats.get('away_passes', 0)}\n")
+        self.stats_box.insert("end", f"Home Saves: {stats.get('home_saves', 0)}\n")
+        self.stats_box.insert("end", f"Away Saves: {stats.get('away_saves', 0)}\n")
+
+        if hasattr(self, "post_stats_box"):
+            self.post_stats_box.delete("1.0", "end")
+            for k, v in stats.items():
+                self.post_stats_box.insert("end", f"{k}: {v}\n")
+
+    def add_timeline_event(self, minute, kind, text):
+        self.timeline_engine.add_event(minute, kind, text)
+        if hasattr(self, "timeline_box"):
+            self.timeline_box.delete("1.0", "end")
+            for line in self.timeline_engine.as_lines(limit=24):
+                self.timeline_box.insert("end", line + "\n")
+        if hasattr(self, "post_events_box"):
+            self.post_events_box.delete("1.0", "end")
+            for line in self.timeline_engine.as_lines(limit=24):
+                self.post_events_box.insert("end", line + "\n")
+
+    # ------------------------------------------------
+    # BACKEND / DATA
     # ------------------------------------------------
 
     def set_backend_indicator(self, online: bool, source: str = "unknown"):
         self.backend_online = online
         self.last_data_source = source
-
         if online:
             self.backend_indicator.config(text="● Backend Online", fg="#22c55e")
         else:
             self.backend_indicator.config(text="● Offline / Cache Mode", fg="#f59e0b")
 
     def startup_backend_then_load(self):
-        self.status_label.config(text="Checking backend...")
         self.add_commentary("Checking backend status...")
+        if hasattr(self, "backend_indicator"):
+            self.backend_indicator.config(text="● Checking backend", fg="#facc15")
         run_in_background(self._ensure_backend_running, self._on_backend_ready, self._on_backend_error)
 
     def _ensure_backend_running(self):
@@ -139,32 +948,19 @@ class FootballSimulator:
     def _on_backend_ready(self, result):
         if result and result.get("ready"):
             self.set_backend_indicator(True, "backend")
-            if result.get("started"):
-                self.add_commentary("Backend started automatically.")
-                self.status_label.config(text="Backend started. Loading simulator data...")
-            else:
-                self.add_commentary("Backend already running.")
-                self.status_label.config(text="Backend online. Loading simulator data...")
-            self.load_initial_data()
+            self.add_commentary("Backend ready.")
         else:
             self.set_backend_indicator(False, "cache")
-            self.status_label.config(text="Backend unavailable. Loading local/cache data...")
-            self.add_commentary("Backend could not be started automatically. Falling back to cache/local data.")
-            self.load_initial_data()
+            self.add_commentary("Backend unavailable. Falling back to cache/local mode.")
+        self.load_initial_data()
 
     def _on_backend_error(self, error):
+        logger.exception("Backend startup error: %s", error)
         self.set_backend_indicator(False, "cache")
-        self.status_label.config(text=f"Backend startup error: {error}")
         self.add_commentary("Backend startup failed. Using cache/local mode.")
         self.load_initial_data()
 
-    # ------------------------------------------------
-    # DATA
-    # ------------------------------------------------
-
     def load_initial_data(self):
-        self.status_label.config(text=f"Loading backend/cache data for {self.current_competition}...")
-        self.add_commentary(f"Loading backend/cache data for {self.current_competition}...")
         run_in_background(self._fetch_all_data, self._on_data_loaded, self._on_data_error)
 
     def _fetch_all_data(self):
@@ -174,7 +970,6 @@ class FootballSimulator:
             "fixtures": self.data_client.load_fixtures(comp),
             "standings": self.data_client.load_standings(comp),
             "news": self.data_client.load_news(comp),
-            "logos": self.data_client.load_logos(comp),
             "usage": self.data_client.load_usage(),
             "export_status": self.data_client.load_export_status(),
             "live_games": self.data_client.load_live_games(),
@@ -183,27 +978,15 @@ class FootballSimulator:
             "tournament_odds": self.data_client.load_odds_tournaments("17"),
         }
 
-    def _guess_data_source(self):
-        files = self.export_status.get("files", []) if isinstance(self.export_status, dict) else []
-        any_export = any(f.get("exists") for f in files) if files else False
-        if self.team_list and self.backend_online:
-            return "backend"
-        if self.team_list and any_export:
-            return "cache"
-        return "limited"
-
     def _on_data_loaded(self, data):
         if not data:
             self.set_backend_indicator(False, "cache")
-            self.status_label.config(text="No data returned. Using fallback state.")
-            self.add_commentary("No backend/cache data returned.")
             return
 
         self.teams = data.get("teams", []) or []
         self.fixtures = data.get("fixtures", []) or []
         self.standings = data.get("standings", []) or []
         self.news_items = data.get("news", []) or []
-        self.logos = data.get("logos", []) or []
         self.backend_usage = data.get("usage", {}) or {}
         self.export_status = data.get("export_status", {}) or {}
         self.live_games = data.get("live_games", {}) or {}
@@ -213,58 +996,20 @@ class FootballSimulator:
 
         self.team_list = sorted({t.get("name", "").strip() for t in self.teams if isinstance(t, dict) and t.get("name")})
 
-        source = self._guess_data_source()
-        self.set_backend_indicator(source == "backend", source)
-
         self.reload_selectors()
-        self.reload_side_panels()
-        self.refresh_sidebar_badges()
-        self.refresh_match_detail_strip()
-        self.refresh_comparison_card()
-
-        used = self.backend_usage.get("used")
-        limit_ = self.backend_usage.get("limit")
-        remaining = self.backend_usage.get("remaining")
-
-        if self.team_list:
-            if used is not None and limit_ is not None and source == "backend":
-                self.status_label.config(
-                    text=f"{self.current_competition} ready | Source: backend | Teams: {len(self.team_list)} | Usage: {used}/{limit_} | Remaining: {remaining}"
-                )
-            else:
-                self.status_label.config(
-                    text=f"{self.current_competition} ready | Source: {source} | Teams: {len(self.team_list)}"
-                )
-            self.add_commentary(f"Simulator data loaded for {self.current_competition}. Teams available: {len(self.team_list)}. Source: {source}.")
-        else:
-            self.status_label.config(text=f"No teams loaded for {self.current_competition}. Backend or cache may be incomplete.")
-            self.add_commentary(f"No teams loaded for {self.current_competition}. Backend or cache may be incomplete.")
-
-        self.show_export_summary()
+        self.refresh_all_display()
+        self.populate_demo_pages()
+        self.add_commentary(f"Loaded {len(self.team_list)} teams.")
 
     def _on_data_error(self, error):
+        logger.exception("Data load error: %s", error)
         self.set_backend_indicator(False, "cache")
-        self.status_label.config(text=f"Data load error: {error}")
-        self.add_commentary("Failed to refresh backend data; using whatever local cache is available.")
-
-    def show_export_summary(self):
-        files = self.export_status.get("files", []) if isinstance(self.export_status, dict) else []
-        if not files:
-            self.add_commentary("Export status unavailable.")
-            return
-        existing = [f["file"] for f in files if f.get("exists")]
-        missing = [f["file"] for f in files if not f.get("exists")]
-        if existing:
-            self.add_commentary("Export files found: " + ", ".join(existing[:5]))
-        if missing:
-            self.add_commentary("Missing export files: " + ", ".join(missing[:5]))
+        self.add_commentary("Failed to refresh backend data.")
 
     def schedule_live_refresh_loop(self):
         self.root.after(self.live_refresh_ms, self._live_refresh_wrapper)
 
     def _live_refresh_wrapper(self):
-        self.status_label.config(text=f"Refreshing backend data for {self.current_competition}...")
-        self.add_commentary(f"Refreshing backend/cache data for {self.current_competition}...")
         run_in_background(self._fetch_all_data, self._on_data_loaded, self._on_data_error)
         self.schedule_live_refresh_loop()
 
@@ -276,64 +1021,27 @@ class FootballSimulator:
                 self.home_box.set(self.team_list[0])
             if not self.away_box.get() or self.away_box.get() not in self.team_list:
                 self.away_box.set(self.team_list[1])
-        elif len(self.team_list) == 1:
-            self.home_box.set(self.team_list[0])
-            self.away_box.set(self.team_list[0])
 
-    def refresh_sidebar_badges(self):
-        home = self.home_box.get().strip()
-        away = self.away_box.get().strip()
+    # ------------------------------------------------
+    # PAGE DATA RENDER
+    # ------------------------------------------------
 
-        self.home_sidebar_badge_img = self.logo_loader.load_size(home, "tiny") if home else None
-        self.away_sidebar_badge_img = self.logo_loader.load_size(away, "tiny") if away else None
+    def refresh_all_display(self):
+        self.refresh_match_detail()
+        self.refresh_compare_card()
+        self.reload_live_panels()
 
-        if self.home_sidebar_badge_img:
-            self.home_badge_sidebar.config(image=self.home_sidebar_badge_img, text="")
-            self.home_badge_sidebar.image = self.home_sidebar_badge_img
-        else:
-            self.home_badge_sidebar.config(image="", text=self.logo_loader.short_text_fallback(home) if home else "")
-
-        if self.away_sidebar_badge_img:
-            self.away_badge_sidebar.config(image=self.away_sidebar_badge_img, text="")
-            self.away_badge_sidebar.image = self.away_sidebar_badge_img
-        else:
-            self.away_badge_sidebar.config(image="", text=self.logo_loader.short_text_fallback(away) if away else "")
-
-    def refresh_match_detail_strip(self):
+    def refresh_match_detail(self):
         home = self.home_box.get().strip() or "Home"
         away = self.away_box.get().strip() or "Away"
-        self.match_detail_label.config(text=f"{home} vs {away} | League: {self.current_competition}")
-        self.odds_caption_label.config(text=self.prediction_engine.build_odds_caption(self.selected_fixture_odds))
 
-        self.detail_home_badge_img = self.logo_loader.load_size(home, "tiny") if home else None
-        self.detail_away_badge_img = self.logo_loader.load_size(away, "tiny") if away else None
+        self.live_match_detail.config(text=f"{home} vs {away} | {self.clock_label.cget('text')}")
+        self.home_name_label.config(text=home)
+        self.away_name_label.config(text=away)
 
-        if self.detail_home_badge_img:
-            self.detail_home_badge.config(image=self.detail_home_badge_img, text="")
-            self.detail_home_badge.image = self.detail_home_badge_img
-        else:
-            self.detail_home_badge.config(image="", text=self.logo_loader.short_text_fallback(home))
+        self.load_header_logos(home, away)
 
-        if self.detail_away_badge_img:
-            self.detail_away_badge.config(image=self.detail_away_badge_img, text="")
-            self.detail_away_badge.image = self.detail_away_badge_img
-        else:
-            self.detail_away_badge.config(image="", text=self.logo_loader.short_text_fallback(away))
-
-    def _safe_ratio(self, a, b):
-        total = max(1, a + b)
-        return int((a / total) * 100)
-
-    def _render_form_bar(self, canvas, left_value, right_value):
-        canvas.delete("all")
-        width = max(1, int(canvas.winfo_width() or 260))
-        height = max(1, int(canvas.winfo_height() or 18))
-        left_w = int(width * (left_value / 100))
-        canvas.create_rectangle(0, 0, left_w, height, outline="", fill="#3b82f6")
-        canvas.create_rectangle(left_w, 0, width, height, outline="", fill="#ef4444")
-        canvas.create_text(width // 2, height // 2, text=f"{left_value}% - {right_value}%", fill="white")
-
-    def refresh_comparison_card(self):
+    def refresh_compare_card(self):
         home = self.home_box.get().strip() or "Home"
         away = self.away_box.get().strip() or "Away"
         hf = self.home_form_data or {}
@@ -350,597 +1058,87 @@ class FootballSimulator:
         self.compare_record_label.config(text=f"Wins recent: {home} {hw} | {away} {aw}")
         self.compare_goals_label.config(text=f"Goals recent: {home} {hgf}-{hga} | {away} {agf}-{aga}")
 
-        win_left = self._safe_ratio(hw, aw)
-        goal_left = self._safe_ratio(hgf, agf)
-        self._render_form_bar(self.wins_bar, win_left, 100 - win_left)
-        self._render_form_bar(self.goals_bar, goal_left, 100 - goal_left)
+        self._render_form_bar(self.wins_bar, self._safe_ratio(hw, aw), 100 - self._safe_ratio(hw, aw))
+        self._render_form_bar(self.goals_bar, self._safe_ratio(hgf, agf), 100 - self._safe_ratio(hgf, agf))
 
-    def _render_selected_odds(self):
-        self.odds_card_home_value.config(text="-")
-        self.odds_card_draw_value.config(text="-")
-        self.odds_card_away_value.config(text="-")
-        self.odds_card_match_label.config(text="Selected match odds unavailable")
+    def reload_live_panels(self):
+        self.live_box.delete("1.0", "end")
+        self.table_box.delete("1.0", "end")
 
-        selected = self.selected_fixture_odds.get("selected", {}) if isinstance(self.selected_fixture_odds, dict) else {}
-        if isinstance(selected, dict) and selected:
-            self.odds_card_match_label.config(text=f"{self.home_box.get().strip()} vs {self.away_box.get().strip()}")
-            self.odds_card_home_value.config(text=str(selected.get("home", "-")))
-            self.odds_card_draw_value.config(text=str(selected.get("draw", "-")))
-            self.odds_card_away_value.config(text=str(selected.get("away", "-")))
+        live_matches = self.live_games.get("live_matches", []) if isinstance(self.live_games, dict) else []
+        scheduled = self.live_games.get("scheduled_with_odds", []) if isinstance(self.live_games, dict) else []
 
-        self.refresh_match_detail_strip()
+        if live_matches:
+            for m in live_matches[:12]:
+                self.live_box.insert("end", f"{m.get('home','')} {m.get('score_home','?')}-{m.get('score_away','?')} {m.get('away','')}  {m.get('minute','')} {m.get('status','LIVE')}\n")
+        elif scheduled:
+            for m in scheduled[:12]:
+                self.live_box.insert("end", f"{m.get('home','')} vs {m.get('away','')}  {m.get('status','')}  {m.get('start_time','')}\n")
+        else:
+            self.live_box.insert("end", "No live games loaded yet.\n")
 
-    def _team_priority_score(self, item_home: str, item_away: str, selected_home: str, selected_away: str) -> int:
-        score = 0
-        exact = item_home == selected_home and item_away == selected_away
-        reverse_exact = item_home == selected_away and item_away == selected_home
-        if exact or reverse_exact:
-            score += 10
-        if selected_home and selected_home in (item_home, item_away):
-            score += 2
-        if selected_away and selected_away in (item_home, item_away):
-            score += 2
-        return score
-
-    def _selected_fixtures_first(self):
-        selected_home = self.home_box.get().strip()
-        selected_away = self.away_box.get().strip()
-        items = list(self.fixtures or [])
-
-        if self.panel_filter:
-            q = self.panel_filter.lower()
-            items = [r for r in items if q in r.get("home", "").lower() or q in r.get("away", "").lower() or q in r.get("status", "").lower()]
-
-        items.sort(
-            key=lambda r: (
-                -self._team_priority_score(r.get("home", ""), r.get("away", ""), selected_home, selected_away),
-                r.get("status", ""),
-                r.get("utcDate", ""),
-            )
-        )
-        return items
-
-    def _filtered_standings(self):
-        items = list(self.standings or [])
-        if self.panel_filter:
-            q = self.panel_filter.lower()
-            items = [r for r in items if q in r.get("team", "").lower()]
-        return items
-
-    def _selected_live_first(self):
-        if not isinstance(self.live_games, dict):
-            return [], [], []
-
-        selected_home = self.home_box.get().strip()
-        selected_away = self.away_box.get().strip()
-
-        live_matches = list(self.live_games.get("live_matches", []) or [])
-        scheduled = list(self.live_games.get("scheduled_with_odds", []) or [])
-        errors = list(self.live_games.get("errors", []) or [])
-
-        if self.panel_filter:
-            q = self.panel_filter.lower()
-            live_matches = [m for m in live_matches if q in m.get("home", "").lower() or q in m.get("away", "").lower() or q in str(m.get("status", "")).lower()]
-            scheduled = [m for m in scheduled if q in m.get("home", "").lower() or q in m.get("away", "").lower() or q in str(m.get("status", "")).lower()]
-
-        live_matches.sort(key=lambda m: -self._team_priority_score(m.get("home", ""), m.get("away", ""), selected_home, selected_away))
-        scheduled.sort(key=lambda m: -self._team_priority_score(m.get("home", ""), m.get("away", ""), selected_home, selected_away))
-        return live_matches, scheduled, errors
-
-    def _head_to_head_summary(self):
-        home = self.home_box.get().strip()
-        away = self.away_box.get().strip()
-        if not home or not away:
-            return "Head-to-head: unavailable"
-
-        matches = []
-        for m in self.fixtures or []:
-            mh = m.get("home", "")
-            ma = m.get("away", "")
-            if {mh, ma} == {home, away}:
-                matches.append(m)
-
-        if not matches:
-            return f"Head-to-head: no recent {home} vs {away} fixtures in cache"
-
-        finished = [m for m in matches if m.get("status") == "FINISHED"]
-        return f"Head-to-head: {len(matches)} cached meetings, {len(finished)} finished"
-
-    def reload_side_panels(self):
-        for box in (self.table_box, self.fixtures_box, self.live_box, self.odds_box, self.news_box):
-            box.delete("1.0", "end")
-
-        self._render_selected_odds()
-
-        standings = self._filtered_standings()
-        if standings:
-            for row in standings[:20]:
+        if self.standings:
+            for row in self.standings[:20]:
                 self.table_box.insert("end", f"{row.get('team','')}  P:{row.get('played',0)}  Pts:{row.get('points',0)}\n")
         else:
             self.table_box.insert("end", "No standings loaded.\n")
 
-        prioritized_fixtures = self._selected_fixtures_first()
-        if prioritized_fixtures:
-            selected_home = self.home_box.get().strip()
-            selected_away = self.away_box.get().strip()
-            self.fixtures_box.insert("end", "SELECTED TEAMS FIRST\n")
-            for row in prioritized_fixtures[:20]:
-                score = self._team_priority_score(row.get("home", ""), row.get("away", ""), selected_home, selected_away)
-                prefix = "◆ " if score >= 10 else ("★ " if score > 0 else "• ")
-                self.fixtures_box.insert("end", f"{prefix}{row.get('home','')} vs {row.get('away','')}   {row.get('status','')}\n")
-        else:
-            self.fixtures_box.insert("end", "No fixtures loaded.\n")
+        self._render_selected_odds()
 
-        live_matches, scheduled, errors = self._selected_live_first()
-        if live_matches:
-            self.live_box.insert("end", "LIVE MATCHES\n")
-            selected_home = self.home_box.get().strip()
-            selected_away = self.away_box.get().strip()
-            for m in live_matches[:12]:
-                score = self._team_priority_score(m.get("home", ""), m.get("away", ""), selected_home, selected_away)
-                prefix = "◆ " if score >= 10 else ("★ " if score > 0 else "• ")
-                self.live_box.insert("end", f"{prefix}{m.get('home','')} {m.get('score_home','?')}-{m.get('score_away','?')} {m.get('away','')}   {m.get('minute','')} {m.get('status','LIVE')}\n")
-        elif scheduled:
-            self.live_box.insert("end", "UPCOMING WITH ODDS\n")
-            selected_home = self.home_box.get().strip()
-            selected_away = self.away_box.get().strip()
-            for m in scheduled[:12]:
-                score = self._team_priority_score(m.get("home", ""), m.get("away", ""), selected_home, selected_away)
-                prefix = "◆ " if score >= 10 else ("★ " if score > 0 else "• ")
-                self.live_box.insert("end", f"{prefix}{m.get('home','')} vs {m.get('away','')}   {m.get('status','')}   {m.get('start_time','')}\n")
-        else:
-            self.live_box.insert("end", "No live games loaded yet.\n")
+    def populate_demo_pages(self):
+        self.club_staff_box.delete("1.0", "end")
+        self.club_history_box.delete("1.0", "end")
+        self.club_fixtures_box.delete("1.0", "end")
+        self.club_graph_box.delete("1.0", "end")
+        self.club_player_stats_box.delete("1.0", "end")
+        self.club_tactical_box.delete("1.0", "end")
+        self.club_transfer_box.delete("1.0", "end")
 
-        if errors:
-            self.live_box.insert("end", "\nErrors:\n")
-            for err in errors[:4]:
-                self.live_box.insert("end", f"- {err}\n")
+        self.player_role_box.delete("1.0", "end")
+        self.player_left_meta_box.delete("1.0", "end")
+        self.player_attributes_box.delete("1.0", "end")
+        self.player_info_box.delete("1.0", "end")
+        self.player_season_box.delete("1.0", "end")
+        self.player_career_box.delete("1.0", "end")
 
-        self.odds_box.insert("end", "ODDS SUMMARY\n")
-        self.odds_box.insert("end", self._head_to_head_summary() + "\n")
+        team = self.home_box.get().strip() or "Club"
+        self.team_overview_head.config(text=f"{team} Overview")
+        self.player_head.config(text=f"{team} Player / Staff Stats")
 
-        if isinstance(self.bet365_prematch, dict):
-            summary = self.bet365_prematch.get("summary", {}) or {}
-            self.odds_box.insert("end", f"Bet365 prematch events: {summary.get('event_count', 0)}\n")
+        self.club_staff_box.insert("end", f"Manager: Head Coach\nClub: {team}\nReputation: High\nTraining: Strong\nYouth: Good\n")
+        self.club_history_box.insert("end", "Top league finish\nCup history\nEuropean history\nRecent form trends\n")
+        for row in self.fixtures[:10]:
+            self.club_fixtures_box.insert("end", f"{row.get('home','')} vs {row.get('away','')}  {row.get('status','')}\n")
+        self.club_graph_box.insert("end", "Season ranking trend\nRevenue trend\nTransfer spend trend\n")
+        self.club_player_stats_box.insert("end", "Top scorer\nMost assists\nHighest rating\nBest passer\n")
+        self.club_tactical_box.insert("end", "Formation: 4-3-3\nPressing: Often\nStyle: Positive\n")
+        self.club_transfer_box.insert("end", "Transfers in\nTransfers out\nNet spend\n")
 
-        if isinstance(self.odds_markets, dict):
-            self.odds_box.insert("end", f"Available markets: {self.odds_markets.get('market_count', 0)}\n")
+        self.player_role_box.insert("end", "Role map\nPreferred positions\nTraits\n")
+        self.player_left_meta_box.insert("end", "Happiness: Good\nForm: Strong\nDiscipline: OK\n")
+        attrs = [
+            "Crossing", "Dribbling", "Finishing", "First Touch", "Passing",
+            "Tackling", "Marking", "Composure", "Aggression", "Vision",
+            "Acceleration", "Balance", "Strength", "Stamina", "Pace"
+        ]
+        for a in attrs:
+            self.player_attributes_box.insert("end", f"{a}: {random.randint(6, 20)}\n")
+        self.player_info_box.insert("end", "Height: 185 cm\nReputation: Local\nPersonality: Determined\n")
+        self.player_season_box.insert("end", "Apps: 0\nGoals: 0\nAssists: 0\nRating: 0.0\n")
+        self.player_career_box.insert("end", "Career apps\nCareer goals\nClub history\n")
 
-        if isinstance(self.tournament_odds, dict):
-            summary = self.tournament_odds.get("summary", {}) or {}
-            self.odds_box.insert("end", f"Tournament odds items: {summary.get('item_count', 0)}\n")
-
-        selected = self.selected_fixture_odds.get("selected", {}) if isinstance(self.selected_fixture_odds, dict) else {}
-        if isinstance(selected, dict) and selected:
-            self.odds_box.insert("end", f"Selected 1X2: H:{selected.get('home','-')} D:{selected.get('draw','-')} A:{selected.get('away','-')}\n")
-        else:
-            self.odds_box.insert("end", "Selected 1X2: unavailable\n")
-
-        if self.news_items:
-            for row in self.news_items[:20]:
-                self.news_box.insert("end", f"{row.get('title','')}\n{row.get('summary','')}\n\n")
-        else:
-            self.news_box.insert("end", "No news loaded.\n")
-
-    def _league_name_from_code(self, code):
-        for name, value in LEAGUE_OPTIONS.items():
-            if value == code:
-                return name
-        return "Premier League"
+        self.post_latest_box.delete("1.0", "end")
+        self.post_table_box.delete("1.0", "end")
+        if self.fixtures:
+            for row in self.fixtures[:8]:
+                self.post_latest_box.insert("end", f"{row.get('home','')} vs {row.get('away','')}\n")
+        if self.standings:
+            for row in self.standings[:10]:
+                self.post_table_box.insert("end", f"{row.get('team','')}  {row.get('points',0)} pts\n")
 
     # ------------------------------------------------
-    # UI
+    # MATCH CONTROL
     # ------------------------------------------------
-
-    def build_ui(self):
-        self.outer = tk.Frame(self.root, bg="#0f172a")
-        self.outer.pack(fill="both", expand=True)
-
-        self.app_canvas = tk.Canvas(self.outer, bg="#0f172a", highlightthickness=0)
-        self.app_canvas.pack(side="left", fill="both", expand=True)
-
-        self.v_scroll = tk.Scrollbar(self.outer, orient="vertical", command=self.app_canvas.yview)
-        self.v_scroll.pack(side="right", fill="y")
-
-        self.h_scroll = tk.Scrollbar(self.root, orient="horizontal", command=self.app_canvas.xview)
-        self.h_scroll.pack(side="bottom", fill="x")
-
-        self.app_canvas.configure(yscrollcommand=self.v_scroll.set, xscrollcommand=self.h_scroll.set)
-
-        self.main = tk.Frame(self.app_canvas, bg="#0f172a")
-        self.canvas_window = self.app_canvas.create_window((0, 0), window=self.main, anchor="nw")
-
-        self.main.bind("<Configure>", self.on_main_configure)
-        self.app_canvas.bind("<Configure>", self.on_canvas_configure)
-
-        self.app_canvas.bind_all("<MouseWheel>", self.on_mousewheel)
-        self.app_canvas.bind_all("<Shift-MouseWheel>", self.on_shift_mousewheel)
-        self.root.bind_all("<Up>", lambda e: self.app_canvas.yview_scroll(-1, "units"))
-        self.root.bind_all("<Down>", lambda e: self.app_canvas.yview_scroll(1, "units"))
-        self.root.bind_all("<Left>", lambda e: self.app_canvas.xview_scroll(-1, "units"))
-        self.root.bind_all("<Right>", lambda e: self.app_canvas.xview_scroll(1, "units"))
-        self.app_canvas.bind("<ButtonPress-1>", self.start_pan)
-        self.app_canvas.bind("<B1-Motion>", self.do_pan)
-
-        self.build_header()
-
-        self.page_nav = tk.Frame(self.main, bg="#14213d")
-        self.page_nav.pack(fill="x", pady=(0, 4))
-
-        tk.Button(self.page_nav, text="Match", command=lambda: self.show_page("match"), bg="#1b3a5a", fg="white").pack(side="left", padx=4, pady=4)
-        tk.Button(self.page_nav, text="Settings", command=lambda: self.show_page("settings"), bg="#1b3a5a", fg="white").pack(side="left", padx=4, pady=4)
-
-        self.match_page = tk.Frame(self.main, bg="#0f172a")
-        self.settings_page = tk.Frame(self.main, bg="#0f172a")
-
-        self.build_match_page()
-        self.build_settings_page()
-        self.show_page("match")
-
-    def on_main_configure(self, _event=None):
-        self.app_canvas.configure(scrollregion=self.app_canvas.bbox("all"))
-
-    def on_canvas_configure(self, event):
-        self.app_canvas.itemconfig(self.canvas_window, width=max(event.width, 1280))
-        self.app_canvas.configure(scrollregion=self.app_canvas.bbox("all"))
-
-    def on_mousewheel(self, event):
-        self.app_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-    def on_shift_mousewheel(self, event):
-        self.app_canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
-
-    def start_pan(self, event):
-        self.app_canvas.scan_mark(event.x, event.y)
-
-    def do_pan(self, event):
-        self.app_canvas.scan_dragto(event.x, event.y, gain=1)
-
-    def show_page(self, page_name):
-        self.match_page.pack_forget()
-        self.settings_page.pack_forget()
-        if page_name == "settings":
-            self.settings_page.pack(fill="both", expand=True)
-        else:
-            self.match_page.pack(fill="both", expand=True)
-
-    def build_header(self):
-        self.header = tk.Frame(self.main, bg="#1e293b", height=84)
-        self.header.pack(fill="x")
-
-        self.home_logo_label = tk.Label(self.header, bg="#1e293b")
-        self.home_logo_label.pack(side="left", padx=(12, 4))
-
-        self.home_name_label = tk.Label(self.header, text="HOME", bg="#1e293b", fg="white", font=("Arial", 15, "bold"))
-        self.home_name_label.pack(side="left", padx=8)
-
-        self.score_label = tk.Label(self.header, text="0 - 0", bg="#1e293b", fg="white", font=("Arial", 36, "bold"))
-        self.score_label.pack(side="left", padx=24)
-
-        self.away_name_label = tk.Label(self.header, text="AWAY", bg="#1e293b", fg="white", font=("Arial", 15, "bold"))
-        self.away_name_label.pack(side="left", padx=8)
-
-        self.away_logo_label = tk.Label(self.header, bg="#1e293b")
-        self.away_logo_label.pack(side="left", padx=(4, 12))
-
-        self.prediction_label = tk.Label(self.header, text="Prediction: waiting", bg="#1e293b", fg="#ffd166", font=("Arial", 11, "bold"), wraplength=420, justify="left")
-        self.prediction_label.pack(side="left", padx=10)
-
-        self.backend_indicator = tk.Label(self.header, text="● Checking backend", bg="#1e293b", fg="#facc15", font=("Arial", 10, "bold"))
-        self.backend_indicator.pack(side="left", padx=10)
-
-        self.clock_label = tk.Label(self.header, text="00:00", bg="#1e293b", fg="white", font=("Arial", 20))
-        self.clock_label.pack(side="right", padx=20)
-
-        self.possession_label = tk.Label(self.header, text="Possession 50% - 50%", bg="#1e293b", fg="white", font=("Arial", 12))
-        self.possession_label.pack(side="right", padx=20)
-
-    def build_match_page(self):
-        body = tk.Frame(self.match_page, bg="#0f172a")
-        body.pack(fill="both", expand=True)
-
-        detail_strip = tk.Frame(self.match_page, bg="#111827")
-        detail_strip.pack(fill="x", pady=(0, 2))
-
-        self.detail_home_badge = tk.Label(detail_strip, bg="#111827", fg="white")
-        self.detail_home_badge.pack(side="left", padx=(8, 4), pady=4)
-
-        self.match_detail_label = tk.Label(detail_strip, text="Home vs Away | League: PL", bg="#111827", fg="#e5e7eb", font=("Arial", 10, "bold"), anchor="w")
-        self.match_detail_label.pack(side="left", padx=6, pady=4)
-
-        self.detail_away_badge = tk.Label(detail_strip, bg="#111827", fg="white")
-        self.detail_away_badge.pack(side="left", padx=(4, 8), pady=4)
-
-        self.odds_caption_label = tk.Label(detail_strip, text="Odds: unavailable", bg="#111827", fg="#93c5fd", font=("Arial", 10), anchor="e")
-        self.odds_caption_label.pack(side="right", padx=10, pady=4)
-
-        self.build_sidebar(body)
-        self.build_pitch(body)
-        self.build_right_panel(body)
-        self.build_footer()
-
-    def build_sidebar(self, parent):
-        self.sidebar = tk.Frame(parent, bg="#0b2545", width=300)
-        self.sidebar.pack(side="left", fill="y")
-
-        tk.Label(self.sidebar, text="League", bg="#0b2545", fg="white").pack(pady=(16, 6))
-        self.league_box = ttk.Combobox(self.sidebar, values=list(LEAGUE_OPTIONS.keys()), state="readonly")
-        self.league_box.pack(padx=12, fill="x")
-        self.league_box.set(self._league_name_from_code(self.current_competition))
-        self.league_box.bind("<<ComboboxSelected>>", self.on_league_changed)
-
-        tk.Label(self.sidebar, text="Home Team", bg="#0b2545", fg="white").pack(pady=(16, 6))
-        home_row = tk.Frame(self.sidebar, bg="#0b2545")
-        home_row.pack(padx=12, fill="x")
-        self.home_badge_sidebar = tk.Label(home_row, bg="#0b2545", fg="white", width=8, anchor="w")
-        self.home_badge_sidebar.pack(side="left")
-        self.home_box = ttk.Combobox(home_row, values=self.team_list, height=20, state="normal")
-        self.home_box.pack(side="left", fill="x", expand=True)
-        self.home_box.bind("<<ComboboxSelected>>", self.on_team_selection_changed)
-
-        tk.Label(self.sidebar, text="Away Team", bg="#0b2545", fg="white").pack(pady=(16, 6))
-        away_row = tk.Frame(self.sidebar, bg="#0b2545")
-        away_row.pack(padx=12, fill="x")
-        self.away_badge_sidebar = tk.Label(away_row, bg="#0b2545", fg="white", width=8, anchor="w")
-        self.away_badge_sidebar.pack(side="left")
-        self.away_box = ttk.Combobox(away_row, values=self.team_list, height=20, state="normal")
-        self.away_box.pack(side="left", fill="x", expand=True)
-        self.away_box.bind("<<ComboboxSelected>>", self.on_team_selection_changed)
-
-        formation_values = ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2"]
-
-        tk.Label(self.sidebar, text="Home Formation", bg="#0b2545", fg="white").pack(pady=(16, 6))
-        self.home_formation_box = ttk.Combobox(self.sidebar, values=formation_values, state="readonly")
-        self.home_formation_box.pack(padx=12, fill="x")
-
-        tk.Label(self.sidebar, text="Away Formation", bg="#0b2545", fg="white").pack(pady=(16, 6))
-        self.away_formation_box = ttk.Combobox(self.sidebar, values=formation_values, state="readonly")
-        self.away_formation_box.pack(padx=12, fill="x")
-
-        self.home_formation_box.set("4-3-3")
-        self.away_formation_box.set("4-2-3-1")
-
-        btn_cfg = {"width": 22, "bg": "#1b3a5a", "fg": "white", "activebackground": "#31577c"}
-
-        tk.Button(self.sidebar, text="▶ Start Match", command=self.start_match, **btn_cfg).pack(pady=(20, 6))
-        tk.Button(self.sidebar, text="⏸ Pause Match", command=self.pause_match, **btn_cfg).pack(pady=6)
-        tk.Button(self.sidebar, text="🔄 Reset Match", command=self.reset_match, **btn_cfg).pack(pady=6)
-        tk.Button(self.sidebar, text="🔃 Refresh Live Data", command=self.load_initial_data, **btn_cfg).pack(pady=6)
-        tk.Button(self.sidebar, text="💰 Transfer Market", command=self.open_transfer_market, **btn_cfg).pack(pady=6)
-        tk.Button(self.sidebar, text="⚙ Settings", command=lambda: self.show_page("settings"), **btn_cfg).pack(pady=6)
-        tk.Button(self.sidebar, text="❌ Quit", command=self.quit_app, **btn_cfg).pack(pady=6)
-
-        self.tactic_label = tk.Label(self.sidebar, text="Live tactics: waiting", bg="#0b2545", fg="#cbd5e1", justify="left", wraplength=250)
-        self.tactic_label.pack(pady=(18, 6), padx=12)
-
-        self.form_label = tk.Label(self.sidebar, text="Team form: waiting", bg="#0b2545", fg="#93c5fd", justify="left", wraplength=250)
-        self.form_label.pack(pady=(8, 6), padx=12)
-
-    def on_league_changed(self, _event=None):
-        selected = self.league_box.get()
-        code = LEAGUE_OPTIONS.get(selected, "PL")
-        self.current_competition = code
-        self.add_commentary(f"League changed to {selected} ({code}). Refreshing data...")
-        self.load_initial_data()
-
-    def on_team_selection_changed(self, _event=None):
-        self.refresh_sidebar_badges()
-        self.refresh_match_detail_strip()
-        self.refresh_comparison_card()
-
-        home = self.home_box.get().strip()
-        away = self.away_box.get().strip()
-        if home and away and home != away:
-            run_in_background(
-                lambda: {
-                    "selected_fixture_odds": self.data_client.load_selected_fixture_odds(home, away),
-                    "home_form": self.data_client.load_team_form(home, self.current_competition),
-                    "away_form": self.data_client.load_team_form(away, self.current_competition),
-                },
-                self._on_selected_context_loaded,
-                self._on_data_error,
-            )
-
-    def _on_selected_context_loaded(self, data):
-        data = data or {}
-        self.selected_fixture_odds = data.get("selected_fixture_odds", {}) or {}
-        self.home_form_data = data.get("home_form", {}) or {}
-        self.away_form_data = data.get("away_form", {}) or {}
-        self.reload_side_panels()
-        self.refresh_match_detail_strip()
-        self.refresh_comparison_card()
-
-    def build_pitch(self, parent):
-        self.pitch_wrap = tk.Frame(parent, bg="#0f172a")
-        self.pitch_wrap.pack(side="left", fill="both", expand=True)
-
-        self.canvas = tk.Canvas(self.pitch_wrap, width=900, height=500, bg="#2e7d32", highlightthickness=0)
-        self.canvas.pack(expand=True, pady=26, padx=10)
-
-    def build_right_panel(self, parent):
-        self.right_panel = tk.Frame(parent, bg="#0b2545", width=390)
-        self.right_panel.pack(side="right", fill="both")
-
-        self.right_canvas = tk.Canvas(self.right_panel, bg="#0b2545", highlightthickness=0, width=390)
-        self.right_scroll = tk.Scrollbar(self.right_panel, orient="vertical", command=self.right_canvas.yview)
-        self.right_inner = tk.Frame(self.right_canvas, bg="#0b2545")
-
-        self.right_inner.bind("<Configure>", lambda e: self.right_canvas.configure(scrollregion=self.right_canvas.bbox("all")))
-
-        self.right_canvas.create_window((0, 0), window=self.right_inner, anchor="nw")
-        self.right_canvas.configure(yscrollcommand=self.right_scroll.set)
-
-        self.right_canvas.pack(side="left", fill="both", expand=True)
-        self.right_scroll.pack(side="right", fill="y")
-
-        filter_wrap = tk.Frame(self.right_inner, bg="#0b2545")
-        filter_wrap.pack(fill="x", padx=10, pady=(10, 4))
-
-        tk.Label(filter_wrap, text="Panel filter", bg="#0b2545", fg="white").pack(side="left")
-        self.panel_filter_var = tk.StringVar()
-        self.panel_filter_var.trace_add("write", self.on_panel_filter_changed)
-        tk.Entry(filter_wrap, textvariable=self.panel_filter_var, bg="#091c34", fg="white", insertbackground="white").pack(side="left", fill="x", expand=True, padx=8)
-
-        self.compare_card = tk.LabelFrame(self.right_inner, text="Team Comparison", bg="#0b2545", fg="white", padx=10, pady=10)
-        self.compare_card.pack(fill="x", padx=10, pady=(10, 8))
-
-        self.compare_title = tk.Label(self.compare_card, text="Home vs Away", bg="#0b2545", fg="#e2e8f0", font=("Arial", 10, "bold"))
-        self.compare_title.pack(anchor="w")
-
-        self.compare_record_label = tk.Label(self.compare_card, text="Wins recent: -", bg="#0b2545", fg="white")
-        self.compare_record_label.pack(anchor="w", pady=(6, 2))
-
-        self.wins_bar = tk.Canvas(self.compare_card, height=18, bg="#091c34", highlightthickness=0)
-        self.wins_bar.pack(fill="x", pady=(0, 6))
-
-        self.compare_goals_label = tk.Label(self.compare_card, text="Goals recent: -", bg="#0b2545", fg="white")
-        self.compare_goals_label.pack(anchor="w", pady=(2, 2))
-
-        self.goals_bar = tk.Canvas(self.compare_card, height=18, bg="#091c34", highlightthickness=0)
-        self.goals_bar.pack(fill="x", pady=(0, 4))
-
-        self.odds_card = tk.LabelFrame(self.right_inner, text="Selected Match Odds", bg="#0b2545", fg="white", padx=10, pady=10)
-        self.odds_card.pack(fill="x", padx=10, pady=(10, 8))
-
-        self.odds_card_match_label = tk.Label(self.odds_card, text="Selected match odds unavailable", bg="#0b2545", fg="#e2e8f0", font=("Arial", 10, "bold"), anchor="w", justify="left")
-        self.odds_card_match_label.pack(fill="x", pady=(0, 8))
-
-        values_row = tk.Frame(self.odds_card, bg="#0b2545")
-        values_row.pack(fill="x")
-
-        self._build_odds_value_box(values_row, "HOME", "odds_card_home_value")
-        self._build_odds_value_box(values_row, "DRAW", "odds_card_draw_value")
-        self._build_odds_value_box(values_row, "AWAY", "odds_card_away_value")
-
-        tk.Label(self.right_inner, text="Match Statistics", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.stats_box = tk.Text(self.right_inner, height=8, width=44, bg="#091c34", fg="white")
-        self.stats_box.pack(padx=10)
-
-        tk.Label(self.right_inner, text="Event Timeline", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.timeline_box = tk.Text(self.right_inner, height=8, width=44, bg="#091c34", fg="white")
-        self.timeline_box.pack(padx=10)
-
-        tk.Label(self.right_inner, text="League Table", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.table_box = tk.Text(self.right_inner, height=8, width=44, bg="#091c34", fg="white")
-        self.table_box.pack(padx=10)
-
-        tk.Label(self.right_inner, text="Fixtures", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.fixtures_box = tk.Text(self.right_inner, height=6, width=44, bg="#091c34", fg="white")
-        self.fixtures_box.pack(padx=10)
-
-        tk.Label(self.right_inner, text="Live Games", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.live_box = tk.Text(self.right_inner, height=6, width=44, bg="#091c34", fg="white")
-        self.live_box.pack(padx=10)
-
-        tk.Label(self.right_inner, text="Odds Summary", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.odds_box = tk.Text(self.right_inner, height=8, width=44, bg="#091c34", fg="white")
-        self.odds_box.pack(padx=10)
-
-        tk.Label(self.right_inner, text="Club News", bg="#0b2545", fg="white", font=("Arial", 12, "bold")).pack(pady=10)
-        self.news_box = tk.Text(self.right_inner, height=6, width=44, bg="#091c34", fg="white")
-        self.news_box.pack(padx=10)
-
-    def on_panel_filter_changed(self, *_args):
-        self.panel_filter = self.panel_filter_var.get().strip()
-        self.reload_side_panels()
-
-    def _build_odds_value_box(self, parent, title, value_attr_name):
-        box = tk.Frame(parent, bg="#091c34", padx=10, pady=8)
-        box.pack(side="left", expand=True, fill="both", padx=4)
-
-        tk.Label(box, text=title, bg="#091c34", fg="#93c5fd", font=("Arial", 9, "bold")).pack()
-        value_label = tk.Label(box, text="-", bg="#091c34", fg="white", font=("Arial", 14, "bold"))
-        value_label.pack()
-        setattr(self, value_attr_name, value_label)
-
-    def build_footer(self):
-        footer = tk.Frame(self.match_page, bg="#020617")
-        footer.pack(fill="x")
-
-        self.commentary_box = tk.Text(footer, height=7, bg="#020617", fg="white")
-        self.commentary_box.pack(fill="x")
-
-        self.status_label = tk.Label(footer, text="Ready", bg="#020617", fg="#94a3b8", anchor="w")
-        self.status_label.pack(fill="x", padx=8, pady=4)
-
-    def build_settings_page(self):
-        frame = self.settings_page
-
-        title = tk.Label(frame, text="Settings", font=("Arial", 22, "bold"), bg="#0f172a", fg="white")
-        title.pack(pady=16)
-
-        content = tk.Frame(frame, bg="#0f172a")
-        content.pack(fill="both", expand=True, padx=20, pady=10)
-
-        visual_card = tk.LabelFrame(content, text="Visual Settings", bg="#0b2545", fg="white", padx=12, pady=12)
-        visual_card.pack(fill="x", pady=8)
-
-        tk.Button(visual_card, text="Toggle Dark / Light", command=self.toggle_theme, bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
-        tk.Button(visual_card, text="Toggle Player Labels", command=self.toggle_player_labels, bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
-        tk.Button(visual_card, text="Toggle Tracker Lines", command=self.toggle_tracker_lines, bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
-
-        league_card = tk.LabelFrame(content, text="League Settings", bg="#0b2545", fg="white", padx=12, pady=12)
-        league_card.pack(fill="x", pady=8)
-
-        tk.Label(league_card, text="Default league", bg="#0b2545", fg="white").pack(anchor="w")
-        self.settings_league_box = ttk.Combobox(league_card, values=list(LEAGUE_OPTIONS.keys()), state="readonly")
-        self.settings_league_box.pack(fill="x", pady=6)
-        self.settings_league_box.set(self._league_name_from_code(self.current_competition))
-        self.settings_league_box.bind("<<ComboboxSelected>>", self.on_settings_league_changed)
-
-        game_card = tk.LabelFrame(content, text="Game Settings", bg="#0b2545", fg="white", padx=12, pady=12)
-        game_card.pack(fill="x", pady=8)
-
-        tk.Button(game_card, text="Match Duration = 60s", command=lambda: self.set_match_duration(60), bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
-        tk.Button(game_card, text="Match Duration = 30s", command=lambda: self.set_match_duration(30), bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
-        tk.Button(game_card, text="Live Refresh = 10 min", command=lambda: self.set_live_refresh(10), bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
-        tk.Button(game_card, text="Live Refresh = 15 min", command=lambda: self.set_live_refresh(15), bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
-
-        audio_card = tk.LabelFrame(content, text="Audio Settings", bg="#0b2545", fg="white", padx=12, pady=12)
-        audio_card.pack(fill="x", pady=8)
-        tk.Button(audio_card, text="Mute / Unmute Crowd", command=self.toggle_mute, bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
-
-        gfx_card = tk.LabelFrame(content, text="Graphics Settings", bg="#0b2545", fg="white", padx=12, pady=12)
-        gfx_card.pack(fill="x", pady=8)
-        tk.Button(gfx_card, text="Normal Graphics", command=lambda: self.set_graphics_mode(False), bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
-        tk.Button(gfx_card, text="Fast Graphics", command=lambda: self.set_graphics_mode(True), bg="#1b3a5a", fg="white").pack(anchor="w", pady=4)
-
-        about_card = tk.LabelFrame(content, text="About", bg="#0b2545", fg="white", padx=12, pady=12)
-        about_card.pack(fill="x", pady=8)
-
-        about_text = (
-            f"Football Match Simulator\n"
-            f"Version: {APP_VERSION}\n"
-            f"{APP_COPYRIGHT}\n"
-            f"Architecture: Simulator → backend → providers"
-        )
-        tk.Label(about_card, text=about_text, justify="left", bg="#0b2545", fg="white").pack(anchor="w")
-
-        tk.Button(frame, text="Back to Match", command=lambda: self.show_page("match"), bg="#1b3a5a", fg="white").pack(pady=12)
-
-    def on_settings_league_changed(self, _event=None):
-        selected = self.settings_league_box.get()
-        code = LEAGUE_OPTIONS.get(selected, "PL")
-        self.current_competition = code
-        self.league_box.set(selected)
-        self.add_commentary(f"League changed from settings to {selected} ({code}). Refreshing data...")
-        self.load_initial_data()
-
-    def load_header_logos(self, home, away):
-        home_logo = self.logo_loader.load(home, small=True)
-        away_logo = self.logo_loader.load(away, small=True)
-
-        if home_logo is not None:
-            self.home_logo_label.config(image=home_logo, text="")
-            self.home_logo_label.image = home_logo
-        else:
-            self.home_logo_label.config(image="", text=self.logo_loader.short_text_fallback(home), fg="white")
-
-        if away_logo is not None:
-            self.away_logo_label.config(image=away_logo, text="")
-            self.away_logo_label.image = away_logo
-        else:
-            self.away_logo_label.config(image="", text=self.logo_loader.short_text_fallback(away), fg="white")
 
     def start_match(self):
         home = self.home_box.get().strip()
@@ -949,23 +1147,11 @@ class FootballSimulator:
         away_form = self.away_formation_box.get().strip()
 
         if not self.team_list:
-            self.add_commentary("No teams available. Fix backend provider keys or cache export first.")
-            self.status_label.config(text="Cannot start match: no teams loaded")
+            self.add_commentary("Cannot start match: no teams loaded")
             return
-
         if not home or not away:
             self.add_commentary("Please select both teams.")
             return
-
-        self.timeline_engine.clear()
-        self.timeline_box.delete("1.0", "end")
-        self.form_label.config(text="Team form: loading...")
-        self.status_label.config(text="Preparing match...")
-
-        self.home_name_label.config(text=home)
-        self.away_name_label.config(text=away)
-        self.load_header_logos(home, away)
-        self.refresh_match_detail_strip()
 
         self.home_score = 0
         self.away_score = 0
@@ -973,10 +1159,10 @@ class FootballSimulator:
         self.match_finished = False
 
         self.score_label.config(text="0 - 0")
-        self.clock_label.config(text="00:00")
+        self.post_score_banner.config(text=f"{home} 0 - 0 {away}")
 
         self.engine.configure_match(home, away, home_form, away_form)
-        self.engine.frame_ms = 30 if self.fast_graphics else 16
+        self.engine.frame_ms = 8 if self.fast_graphics else 12
 
         run_in_background(
             lambda: {
@@ -993,6 +1179,7 @@ class FootballSimulator:
             self.engine.animate()
             self.audio.play_crowd()
             self.add_commentary(f"{home} vs {away} kickoff!")
+            self.show_page("live_match")
 
     def _apply_pre_match_data(self, home, away, result):
         self.home_form_data = result.get("home_form", {}) if result else {}
@@ -1011,8 +1198,6 @@ class FootballSimulator:
         )
 
         self.prediction_label.config(text=prediction_text)
-        self.add_commentary(prediction_text)
-
         self.form_label.config(
             text=(
                 f"Team form\n"
@@ -1020,16 +1205,12 @@ class FootballSimulator:
                 f"{away}: {' '.join(self.away_form_data.get('form_last5', [])) or 'n/a'}"
             )
         )
-
-        self.reload_side_panels()
-        self.refresh_match_detail_strip()
-        self.refresh_comparison_card()
-        self.status_label.config(text="Match started")
+        self.add_commentary(prediction_text)
+        self.refresh_all_display()
 
     def pause_match(self):
         self.engine.running = False
         self.add_commentary("Match paused.")
-        self.status_label.config(text="Match paused")
 
     def reset_match(self):
         self.engine.reset_match()
@@ -1044,30 +1225,41 @@ class FootballSimulator:
         self.home_form_data = {}
         self.away_form_data = {}
 
-        self.clock_label.config(text="00:00")
         self.score_label.config(text="0 - 0")
+        self.clock_label.config(text="00:00")
         self.possession_label.config(text="Possession 50% - 50%")
         self.prediction_label.config(text="Prediction: waiting")
-        self.stats_box.delete("1.0", "end")
-        self.timeline_box.delete("1.0", "end")
-        self.tactic_label.config(text="Live tactics: waiting")
-        self.form_label.config(text="Team form: waiting")
-        self.status_label.config(text="Match reset")
-        self.reload_side_panels()
-        self.refresh_match_detail_strip()
-        self.refresh_comparison_card()
+        self.post_score_banner.config(text="Home 0 - 0 Away")
 
+        if hasattr(self, "stats_box"):
+            self.stats_box.delete("1.0", "end")
+        if hasattr(self, "timeline_box"):
+            self.timeline_box.delete("1.0", "end")
+        if hasattr(self, "post_events_box"):
+            self.post_events_box.delete("1.0", "end")
+        if hasattr(self, "post_stats_box"):
+            self.post_stats_box.delete("1.0", "end")
+
+        self.form_label.config(text="Team form: waiting")
+        self.refresh_all_display()
         self.add_commentary("Match reset.")
 
-    def open_transfer_market(self):
-        win = tk.Toplevel(self.root)
-        win.title("Transfer Market")
-        win.geometry("560x430")
+    def finish_match(self):
+        if self.match_finished:
+            return
 
-        box = tk.Text(win, bg="#091c34", fg="white")
-        box.pack(fill="both", expand=True)
-        box.insert("end", "Transfer market integration is ready.\n")
-        box.insert("end", "This window can be connected to backend-backed player market data later.\n")
+        self.match_finished = True
+        self.engine.running = False
+
+        home = self.home_box.get().strip() or "Home"
+        away = self.away_box.get().strip() or "Away"
+        final_line = f"Full time: {home} {self.home_score} - {self.away_score} {away}"
+        self.post_score_banner.config(text=f"{home} {self.home_score} - {self.away_score} {away}")
+        self.add_commentary(final_line)
+
+    # ------------------------------------------------
+    # LIVE LOOPS / CALLBACKS
+    # ------------------------------------------------
 
     def update_manager_tactics_loop(self):
         if hasattr(self, "engine") and self.engine.running and not self.match_finished:
@@ -1092,11 +1284,19 @@ class FootballSimulator:
 
         self.root.after(2000, self.update_manager_tactics_loop)
 
-    def add_timeline_event(self, minute, kind, text):
-        self.timeline_engine.add_event(minute, kind, text)
-        self.timeline_box.delete("1.0", "end")
-        for line in self.timeline_engine.as_lines(limit=24):
-            self.timeline_box.insert("end", line + "\n")
+    def update_clock(self):
+        if hasattr(self, "engine") and self.engine.running and not self.match_finished:
+            self.match_time += 1
+            minutes = self.match_time // 60
+            seconds = self.match_time % 60
+            clock_text = f"{minutes:02}:{seconds:02}"
+            self.clock_label.config(text=clock_text)
+            self.live_match_detail.config(text=f"{self.home_box.get().strip() or 'Home'} vs {self.away_box.get().strip() or 'Away'} | {clock_text}")
+
+            if self.match_time >= self.match_duration_seconds:
+                self.finish_match()
+
+        self.root.after(1000, self.update_clock)
 
     def goal_scored(self, team):
         if team == "home":
@@ -1106,93 +1306,196 @@ class FootballSimulator:
 
         self.audio.play_goal()
         self.score_label.config(text=f"{self.home_score} - {self.away_score}")
+        self.post_score_banner.config(text=f"{self.home_box.get().strip() or 'Home'} {self.home_score} - {self.away_score} {self.away_box.get().strip() or 'Away'}")
         self.add_commentary(self.commentary_engine.goal_commentary())
-
-        minute = max(1, self.match_time)
-        side = self.home_name_label.cget("text") if team == "home" else self.away_name_label.cget("text")
-        self.add_timeline_event(minute, "goal", f"Goal for {side}")
 
     def update_possession(self, home, away):
         self.possession_label.config(text=f"Possession {home}% - {away}%")
 
-    def update_stats(self, stats):
-        self.stats_box.delete("1.0", "end")
-        self.stats_box.insert("end", f"Home Shots: {stats['home_shots']}\n")
-        self.stats_box.insert("end", f"Away Shots: {stats['away_shots']}\n")
-        self.stats_box.insert("end", f"Home On Target: {stats['home_on_target']}\n")
-        self.stats_box.insert("end", f"Away On Target: {stats['away_on_target']}\n")
-        self.stats_box.insert("end", f"Home Passes: {stats['home_passes']}\n")
-        self.stats_box.insert("end", f"Away Passes: {stats['away_passes']}\n")
-        self.stats_box.insert("end", f"Home Saves: {stats['home_saves']}\n")
-        self.stats_box.insert("end", f"Away Saves: {stats['away_saves']}\n")
+    # ------------------------------------------------
+    # SETTINGS / PERSONALIZATION
+    # ------------------------------------------------
 
-    def add_commentary(self, text):
-        self.commentary_box.insert("end", text + "\n")
-        lines = int(self.commentary_box.index("end-1c").split(".")[0])
-        if lines > 240:
-            self.commentary_box.delete("1.0", "2.0")
-        self.commentary_box.see("end")
+    def apply_personalization_settings(self):
+        try:
+            self.font_family = self.font_family_box.get()
+            self.header_font_size = int(self.header_size_spin.get())
+            self.body_font_size = int(self.body_size_spin.get())
+            self.score_font_size = int(self.score_size_spin.get())
 
-    def finish_match(self):
-        if self.match_finished:
+            theme_name = self.theme_box.get()
+            theme = THEME_PRESETS.get(theme_name, THEME_PRESETS["Broadcast Purple"])
+            self.theme_bg = theme["theme_bg"]
+            self.card_bg = theme["card_bg"]
+            self.panel_bg = theme["panel_bg"]
+            self.text_fg = theme["text_fg"]
+            self.muted_fg = theme["muted_fg"]
+            self.accent = theme["accent"]
+            self.accent2 = theme["accent2"]
+            self.pitch_bg = self.pitch_color_box.get() or theme["pitch_bg"]
+
+            self.apply_theme_to_widgets()
+            self.add_commentary("Personalization applied.")
+            self.show_page("settings_home")
+        except Exception as e:
+            messagebox.showerror("Personalization", f"Could not apply settings:\n{e}")
+
+    def choose_background(self, kind: str):
+        path = filedialog.askopenfilename(
+            title=f"Choose {kind} background",
+            filetypes=[("Image files", "*.png *.jpg *.jpeg *.gif"), ("All files", "*.*")],
+        )
+        if not path:
             return
 
-        self.match_finished = True
-        self.engine.running = False
+        if kind == "main":
+            self.main_background_path = path
+            self.main_bg_label.config(text=f"Main image: {path}")
+        elif kind == "general":
+            self.general_background_path = path
+            self.general_bg_label.config(text=f"General image: {path}")
+        elif kind == "pitch":
+            self.pitch_background_path = path
+            self.pitch_bg_label.config(text=f"Pitch image: {path}")
+        elif kind == "stadium":
+            self.stadium_background_path = path
+            self.stadium_bg_label.config(text=f"Stadium image: {path}")
 
-        home = self.home_box.get().strip()
-        away = self.away_box.get().strip()
+        self.add_commentary(f"{kind.title()} background set.")
 
-        self.add_commentary(f"Full time: {home} {self.home_score} - {self.away_score} {away}")
+    def apply_theme_to_widgets(self):
+        self.root.configure(bg=self.theme_bg)
+        self.main.configure(bg=self.theme_bg)
+        self.page_host.configure(bg=self.theme_bg)
 
-        post_text = f"Post-match model: {home} {self.home_score}-{self.away_score} {away}"
-        self.prediction_label.config(text=post_text)
-        self.add_commentary(post_text)
-        self.status_label.config(text="Match finished")
+        self.app_title.configure(fg=self.text_fg)
+        self.clock_top.configure(fg=self.text_fg)
 
-    def update_clock(self):
-        if hasattr(self, "engine") and self.engine.running and not self.match_finished:
-            self.match_time += 1
-            minutes = self.match_time // 60
-            seconds = self.match_time % 60
-            self.clock_label.config(text=f"{minutes:02}:{seconds:02}")
+        self.header_strip.configure(bg=self.card_bg)
+        self.home_logo_label.configure(bg=self.card_bg, fg=self.text_fg)
+        self.home_name_label.configure(bg=self.card_bg, fg=self.text_fg, font=(self.font_family, self.header_font_size, "bold"))
+        self.score_label.configure(bg=self.card_bg, fg=self.text_fg, font=(self.font_family, self.score_font_size, "bold"))
+        self.away_name_label.configure(bg=self.card_bg, fg=self.text_fg, font=(self.font_family, self.header_font_size, "bold"))
+        self.away_logo_label.configure(bg=self.card_bg, fg=self.text_fg)
+        self.prediction_label.configure(bg=self.card_bg, font=(self.font_family, self.body_font_size + 1, "bold"))
+        self.backend_indicator.configure(bg=self.card_bg)
+        self.clock_label.configure(bg=self.card_bg, fg=self.text_fg, font=(self.font_family, self.header_font_size + 4, "bold"))
+        self.possession_label.configure(bg=self.card_bg, fg=self.text_fg, font=(self.font_family, self.body_font_size))
 
-            if self.match_time >= self.match_duration_seconds:
-                self.finish_match()
+        self.canvas.configure(bg=self.pitch_bg)
 
-        self.root.after(1000, self.update_clock)
-
-    def set_match_duration(self, secs):
-        self.match_duration_seconds = secs
-        self.add_commentary(f"Match duration set to {secs} seconds.")
-
-    def set_live_refresh(self, mins):
-        self.live_refresh_ms = mins * 60 * 1000
-        self.add_commentary(f"Live data refresh set to every {mins} minutes.")
-
-    def toggle_theme(self):
-        self.dark_mode = not self.dark_mode
-        bg = "#0f172a" if self.dark_mode else "#dbe4ee"
-        self.root.configure(bg=bg)
-        self.main.configure(bg=bg)
-        self.match_page.configure(bg=bg)
-        self.settings_page.configure(bg=bg)
+    def set_refresh_quality(self, mode: str):
+        if mode == "high":
+            self.engine.frame_ms = 8
+            self.fast_graphics = False
+        elif mode == "balanced":
+            self.engine.frame_ms = 12
+            self.fast_graphics = False
+        else:
+            self.engine.frame_ms = 18
+            self.fast_graphics = True
+        self.add_commentary(f"Refresh quality set to {mode}.")
 
     def toggle_mute(self):
         self.audio_enabled = not self.audio_enabled
         self.audio.set_muted(not self.audio_enabled)
+        self.add_commentary("Audio toggled.")
 
-    def toggle_player_labels(self):
-        self.show_player_labels = not self.show_player_labels
-        self.add_commentary(f"Player labels {'ON' if self.show_player_labels else 'OFF'}.")
+    # ------------------------------------------------
+    # SELECTION HELPERS
+    # ------------------------------------------------
 
-    def toggle_tracker_lines(self):
-        self.show_tracker_lines = not self.show_tracker_lines
-        self.add_commentary(f"Tracker lines {'ON' if self.show_tracker_lines else 'OFF'}.")
+    def on_league_changed(self, _event=None):
+        selected = self.league_box.get()
+        code = LEAGUE_OPTIONS.get(selected, "PL")
+        self.current_competition = code
+        self.add_commentary(f"League changed to {selected} ({code}). Refreshing data...")
+        self.load_initial_data()
 
-    def set_graphics_mode(self, fast_mode):
-        self.fast_graphics = fast_mode
-        self.add_commentary("Fast graphics enabled." if fast_mode else "Normal graphics enabled.")
+    def on_team_selection_changed(self, _event=None):
+        home = self.home_box.get().strip()
+        away = self.away_box.get().strip()
+
+        self.refresh_match_detail()
+
+        if home and away and home != away:
+            run_in_background(
+                lambda: {
+                    "selected_fixture_odds": self.data_client.load_selected_fixture_odds(home, away),
+                    "home_form": self.data_client.load_team_form(home, self.current_competition),
+                    "away_form": self.data_client.load_team_form(away, self.current_competition),
+                },
+                self._on_selected_context_loaded,
+                self._on_data_error,
+            )
+
+    def _on_selected_context_loaded(self, data):
+        data = data or {}
+        self.selected_fixture_odds = data.get("selected_fixture_odds", {}) or {}
+        self.home_form_data = data.get("home_form", {}) or {}
+        self.away_form_data = data.get("away_form", {}) or {}
+        self.refresh_all_display()
+
+    def _league_name_from_code(self, code):
+        for name, value in LEAGUE_OPTIONS.items():
+            if value == code:
+                return name
+        return "Premier League"
+
+    def load_header_logos(self, home, away):
+        home_logo = self.logo_loader.load(home, small=True)
+        away_logo = self.logo_loader.load(away, small=True)
+
+        if home_logo is not None:
+            self.home_logo_label.config(image=home_logo, text="")
+            self.home_logo_label.image = home_logo
+        else:
+            self.home_logo_label.config(image="", text=self.logo_loader.short_text_fallback(home), fg=self.text_fg)
+
+        if away_logo is not None:
+            self.away_logo_label.config(image=away_logo, text="")
+            self.away_logo_label.image = away_logo
+        else:
+            self.away_logo_label.config(image="", text=self.logo_loader.short_text_fallback(away), fg=self.text_fg)
+
+    def _render_selected_odds(self):
+        self.odds_card_home_value.config(text="-")
+        self.odds_card_draw_value.config(text="-")
+        self.odds_card_away_value.config(text="-")
+
+        selected = self.selected_fixture_odds.get("selected", {}) if isinstance(self.selected_fixture_odds, dict) else {}
+        if isinstance(selected, dict) and selected:
+            self.odds_card_home_value.config(text=str(selected.get("home", "-")))
+            self.odds_card_draw_value.config(text=str(selected.get("draw", "-")))
+            self.odds_card_away_value.config(text=str(selected.get("away", "-")))
+
+    def _safe_ratio(self, a, b):
+        total = max(1, a + b)
+        return int((a / total) * 100)
+
+    def _render_form_bar(self, canvas, left_value, right_value):
+        canvas.delete("all")
+        width = max(1, int(canvas.winfo_width() or 260))
+        height = max(1, int(canvas.winfo_height() or 18))
+        left_w = int(width * (left_value / 100))
+        canvas.create_rectangle(0, 0, left_w, height, outline="", fill="#2563eb")
+        canvas.create_rectangle(left_w, 0, width, height, outline="", fill="#dc2626")
+        canvas.create_text(width // 2, height // 2, text=f"{left_value}% - {right_value}%", fill="white")
+
+    # ------------------------------------------------
+    # OTHER
+    # ------------------------------------------------
+
+    def open_transfer_market(self):
+        win = tk.Toplevel(self.root)
+        win.title("Transfer Market")
+        win.geometry("560x430")
+
+        box = tk.Text(win, bg="#09111f", fg="white")
+        box.pack(fill="both", expand=True)
+
+        box.insert("end", "Transfer market integration is ready.\n")
+        box.insert("end", "This window can be connected to backend-backed player market data later.\n")
 
     def quit_app(self):
         if messagebox.askyesno("Quit", "Exit simulator?"):
