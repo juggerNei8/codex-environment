@@ -1,48 +1,59 @@
 from __future__ import annotations
 
+import json
+import urllib.parse
+import urllib.request
 from typing import Any, Optional
-import requests
 
 from .config import SimulatorBackendConfig
 
 
 class BackendHttpClient:
-    def __init__(self, cfg: SimulatorBackendConfig) -> None:
-        self.cfg = cfg
+    def __init__(self, cfg: Optional[SimulatorBackendConfig] = None) -> None:
+        self.cfg = cfg or SimulatorBackendConfig()
 
-    def _headers(self) -> dict:
-        token = (self.cfg.simulator_token or "").strip()
-        headers = {"Accept": "application/json"}
+    def _resolve_base_url(self) -> str:
+        base = getattr(self.cfg, "base_url", None)
+        if not base:
+            base = getattr(self.cfg, "backend_base_url", None)
+        if not base:
+            base = "http://127.0.0.1:8001"
+        return str(base).rstrip("/")
 
-        if token:
-            headers["X-Simulator-Token"] = token
+    def _build_url(self, endpoint_path: str, params: Optional[dict] = None) -> str:
+        base = self._resolve_base_url()
+        endpoint = endpoint_path if endpoint_path.startswith("/") else f"/{endpoint_path}"
+        url = f"{base}{endpoint}"
 
-        return headers
+        if params:
+            clean_params = {k: v for k, v in params.items() if v is not None}
+            query = urllib.parse.urlencode(clean_params)
+            if query:
+                url = f"{url}?{query}"
 
-    def get_data(self, path: str, params: Optional[dict] = None) -> Optional[Any]:
-        if not self.cfg.enable_http_fallback:
-            return None
+        return url
 
-        url = self.cfg.base_url.rstrip("/") + path
+    def _unwrap_payload(self, payload: Any) -> Any:
+        if not isinstance(payload, dict):
+            return payload
+        if "data" in payload:
+            return payload.get("data")
+        return payload
+
+    def get_data(self, endpoint_path: str, params: Optional[dict] = None) -> Any:
+        url = self._build_url(endpoint_path, params=params)
+        request = urllib.request.Request(
+            url,
+            headers={
+                "X-Simulator-Token": self.cfg.simulator_token,
+                "Accept": "application/json",
+            },
+            method="GET",
+        )
         try:
-            r = requests.get(
-                url,
-                params=params,
-                headers=self._headers(),
-                timeout=self.cfg.http_timeout_seconds,
-            )
-
-            print(f"DEBUG HTTP GET {url} status={r.status_code}")
-
-            payload = r.json() if "application/json" in (r.headers.get("content-type") or "") else None
-            if not payload or not isinstance(payload, dict):
-                return None
-
-            if payload.get("success") is True:
-                return payload.get("data")
-
-            print("DEBUG backend payload failure:", payload)
-            return None
-        except Exception as e:
-            print("DEBUG BackendHttpClient error:", repr(e))
+            with urllib.request.urlopen(request, timeout=self.cfg.http_timeout_seconds) as response:
+                raw = response.read().decode("utf-8")
+                payload = json.loads(raw)
+                return self._unwrap_payload(payload)
+        except Exception:
             return None

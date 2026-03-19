@@ -1,0 +1,526 @@
+2026-03-16 11:57:13,715 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-16 11:57:13,717 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 11:57:13,719 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 11:57:13,721 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 11:59:51,342 | WARNING | simulator_app | Could not load image C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png: couldn't recognize data in image file "C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png"
+2026-03-16 11:59:51,358 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 11:59:51,360 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 11:59:51,361 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 11:59:58,446 | WARNING | simulator_app | Could not load image C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png: couldn't recognize data in image file "C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png"
+2026-03-16 11:59:58,448 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 11:59:58,450 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 11:59:58,451 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 12:00:31,237 | WARNING | simulator_app | Could not load image C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png: couldn't recognize data in image file "C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png"
+2026-03-16 12:00:31,238 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 12:00:31,240 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 12:00:31,241 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 12:00:41,392 | WARNING | simulator_app | Could not load image C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png: couldn't recognize data in image file "C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png"
+2026-03-16 12:00:41,393 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 12:00:41,394 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 12:00:41,396 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 12:02:44,594 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-16 12:02:44,596 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 12:02:44,597 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 12:02:44,600 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 12:05:04,669 | WARNING | simulator_app | Could not load image C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png: couldn't recognize data in image file "C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png"
+2026-03-16 12:05:04,671 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 12:05:04,673 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 12:05:04,674 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 12:05:07,491 | WARNING | simulator_app | Could not load image C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png: couldn't recognize data in image file "C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png"
+2026-03-16 12:05:07,493 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 12:05:07,494 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 12:05:07,495 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 12:17:33,453 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-16 12:17:33,455 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 12:17:33,457 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 12:17:33,459 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 12:22:59,107 | WARNING | simulator_app | Could not load image C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png: couldn't recognize data in image file "C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png"
+2026-03-16 12:22:59,108 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 12:22:59,108 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 12:22:59,112 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 12:23:01,451 | WARNING | simulator_app | Could not load image C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png: couldn't recognize data in image file "C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png"
+2026-03-16 12:23:01,452 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 12:23:01,454 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 12:23:01,455 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 12:34:42,106 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-16 12:34:42,108 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 12:34:42,111 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 12:34:42,114 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 12:38:30,485 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-16 12:38:30,486 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 12:38:30,488 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 12:38:30,491 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 16:44:59,653 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-16 16:44:59,816 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 16:44:59,818 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 16:44:59,820 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 17:08:42,216 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-16 17:08:42,219 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 17:08:42,222 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 17:08:42,225 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 17:37:39,383 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-16 17:37:39,387 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 17:37:39,389 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 17:37:39,391 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 17:41:49,543 | WARNING | simulator_app | Could not load image C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png: couldn't recognize data in image file "C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png"
+2026-03-16 17:41:49,545 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 17:41:49,547 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 17:41:49,549 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-16 17:41:51,945 | WARNING | simulator_app | Could not load image C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png: couldn't recognize data in image file "C:/Project X/codex-environment-main/src/assets/backgrounds/main_bg.png"
+2026-03-16 17:41:51,948 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-16 17:41:51,950 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-16 17:41:51,951 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-17 01:57:11,634 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-17 01:57:11,839 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-17 01:57:11,854 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-17 01:57:11,893 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-17 01:58:01,074 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute '_apply_pre_match_data'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 1437, in <lambda>
+    lambda result: self._apply_pre_match_data(home, away, result),
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute '_apply_pre_match_data'
+2026-03-17 01:59:03,771 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute '_apply_pre_match_data'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 1437, in <lambda>
+    lambda result: self._apply_pre_match_data(home, away, result),
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute '_apply_pre_match_data'
+2026-03-17 03:04:35,188 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-17 03:04:35,192 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-17 03:04:35,195 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-17 03:04:35,203 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-17 03:30:31,351 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-17 03:30:31,354 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-17 03:30:31,370 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-17 03:30:31,416 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-17 03:31:35,392 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-17 03:31:35,398 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-17 03:31:35,400 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-17 03:31:35,402 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-17 04:36:18,972 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-17 04:36:18,975 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-17 04:36:18,978 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-17 04:36:18,980 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-17 04:36:19,066 | ERROR | simulator_app | Data load error: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 19, in _worker
+    result = fn()
+             ^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 1267, in _fetch_all_data
+    "fixtures": self.data_client.load_fixtures(comp),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 73, in load_fixtures
+    return self._load_preferring_file(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 52, in _load_preferring_file
+    data = self.http.get_data(endpoint_path, params=params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 38, in get_data
+    url = self._build_url(endpoint_path, params=params)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 16, in _build_url
+    base = self.cfg.backend_base_url.rstrip("/")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+2026-03-17 04:36:31,189 | ERROR | simulator_app | Data load error: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 19, in _worker
+    result = fn()
+             ^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 1267, in _fetch_all_data
+    "fixtures": self.data_client.load_fixtures(comp),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 73, in load_fixtures
+    return self._load_preferring_file(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 52, in _load_preferring_file
+    data = self.http.get_data(endpoint_path, params=params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 38, in get_data
+    url = self._build_url(endpoint_path, params=params)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 16, in _build_url
+    base = self.cfg.backend_base_url.rstrip("/")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+2026-03-17 04:36:37,371 | ERROR | simulator_app | Data load error: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 19, in _worker
+    result = fn()
+             ^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 1267, in _fetch_all_data
+    "fixtures": self.data_client.load_fixtures(comp),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 73, in load_fixtures
+    return self._load_preferring_file(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 52, in _load_preferring_file
+    data = self.http.get_data(endpoint_path, params=params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 38, in get_data
+    url = self._build_url(endpoint_path, params=params)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 16, in _build_url
+    base = self.cfg.backend_base_url.rstrip("/")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+2026-03-17 04:36:55,319 | ERROR | simulator_app | Data load error: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 19, in _worker
+    result = fn()
+             ^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 1267, in _fetch_all_data
+    "fixtures": self.data_client.load_fixtures(comp),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 73, in load_fixtures
+    return self._load_preferring_file(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 52, in _load_preferring_file
+    data = self.http.get_data(endpoint_path, params=params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 38, in get_data
+    url = self._build_url(endpoint_path, params=params)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 16, in _build_url
+    base = self.cfg.backend_base_url.rstrip("/")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+2026-03-17 04:37:01,062 | ERROR | simulator_app | Data load error: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 19, in _worker
+    result = fn()
+             ^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 1267, in _fetch_all_data
+    "fixtures": self.data_client.load_fixtures(comp),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 73, in load_fixtures
+    return self._load_preferring_file(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 52, in _load_preferring_file
+    data = self.http.get_data(endpoint_path, params=params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 38, in get_data
+    url = self._build_url(endpoint_path, params=params)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 16, in _build_url
+    base = self.cfg.backend_base_url.rstrip("/")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+2026-03-17 04:37:06,902 | ERROR | simulator_app | Data load error: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 19, in _worker
+    result = fn()
+             ^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 1267, in _fetch_all_data
+    "fixtures": self.data_client.load_fixtures(comp),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 73, in load_fixtures
+    return self._load_preferring_file(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 52, in _load_preferring_file
+    data = self.http.get_data(endpoint_path, params=params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 38, in get_data
+    url = self._build_url(endpoint_path, params=params)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 16, in _build_url
+    base = self.cfg.backend_base_url.rstrip("/")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+2026-03-17 04:37:23,760 | ERROR | simulator_app | Data load error: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 19, in _worker
+    result = fn()
+             ^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 1267, in _fetch_all_data
+    "fixtures": self.data_client.load_fixtures(comp),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 73, in load_fixtures
+    return self._load_preferring_file(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 52, in _load_preferring_file
+    data = self.http.get_data(endpoint_path, params=params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 38, in get_data
+    url = self._build_url(endpoint_path, params=params)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 16, in _build_url
+    base = self.cfg.backend_base_url.rstrip("/")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+2026-03-17 04:37:29,453 | ERROR | simulator_app | Data load error: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 19, in _worker
+    result = fn()
+             ^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 1267, in _fetch_all_data
+    "fixtures": self.data_client.load_fixtures(comp),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 73, in load_fixtures
+    return self._load_preferring_file(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 52, in _load_preferring_file
+    data = self.http.get_data(endpoint_path, params=params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 38, in get_data
+    url = self._build_url(endpoint_path, params=params)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 16, in _build_url
+    base = self.cfg.backend_base_url.rstrip("/")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+2026-03-17 04:37:42,470 | ERROR | simulator_app | Data load error: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 19, in _worker
+    result = fn()
+             ^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 1267, in _fetch_all_data
+    "fixtures": self.data_client.load_fixtures(comp),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 73, in load_fixtures
+    return self._load_preferring_file(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 52, in _load_preferring_file
+    data = self.http.get_data(endpoint_path, params=params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 38, in get_data
+    url = self._build_url(endpoint_path, params=params)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 16, in _build_url
+    base = self.cfg.backend_base_url.rstrip("/")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+2026-03-17 04:37:47,216 | ERROR | simulator_app | Data load error: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 19, in _worker
+    result = fn()
+             ^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 1267, in _fetch_all_data
+    "fixtures": self.data_client.load_fixtures(comp),
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 73, in load_fixtures
+    return self._load_preferring_file(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\backend_client.py", line 52, in _load_preferring_file
+    data = self.http.get_data(endpoint_path, params=params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 38, in get_data
+    url = self._build_url(endpoint_path, params=params)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\sim_integration\http_client.py", line 16, in _build_url
+    base = self.cfg.backend_base_url.rstrip("/")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SimulatorBackendConfig' object has no attribute 'backend_base_url'
+2026-03-17 04:42:05,868 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-17 04:42:05,872 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-17 04:42:05,874 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-17 04:42:05,877 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-17 05:40:11,946 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-17 05:40:11,950 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-17 05:40:11,957 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-17 05:40:11,969 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-17 05:48:48,064 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-17 05:48:48,074 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-17 05:48:48,077 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-17 05:48:48,080 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-17 06:45:13,394 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-17 06:45:13,398 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-17 06:45:13,412 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-17 06:45:13,416 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-17 08:06:04,857 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-17 08:06:04,929 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-17 08:06:05,071 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-17 08:06:05,823 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-17 08:09:14,752 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-17 08:09:14,755 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-17 08:09:14,757 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-17 08:09:14,759 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-17 08:57:31,244 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\main_bg.png"
+2026-03-17 08:57:31,246 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\general_bg.png"
+2026-03-17 08:57:31,248 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\pitch_bg.png"
+2026-03-17 08:57:31,251 | WARNING | simulator_app | Could not load image C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png: couldn't recognize data in image file "C:\Project X\codex-environment-main\src\assets\backgrounds\stadium_bg.png"
+2026-03-18 01:44:56,751 | ERROR | simulator_app | Data load error: 'SimulatorDataClient' object has no attribute 'load_match_intelligence'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 19, in _worker
+    result = fn()
+             ^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 1995, in <lambda>
+    "match_intelligence": self.data_client.load_match_intelligence(home, away, self.current_competition),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SimulatorDataClient' object has no attribute 'load_match_intelligence'
+2026-03-18 01:45:21,911 | ERROR | simulator_app | Data load error: 'SimulatorDataClient' object has no attribute 'load_match_intelligence'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 19, in _worker
+    result = fn()
+             ^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 1995, in <lambda>
+    "match_intelligence": self.data_client.load_match_intelligence(home, away, self.current_competition),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SimulatorDataClient' object has no attribute 'load_match_intelligence'
+2026-03-18 01:46:50,090 | ERROR | simulator_app | Data load error: 'SimulatorDataClient' object has no attribute 'load_match_intelligence'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 19, in _worker
+    result = fn()
+             ^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 1995, in <lambda>
+    "match_intelligence": self.data_client.load_match_intelligence(home, away, self.current_competition),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SimulatorDataClient' object has no attribute 'load_match_intelligence'
+2026-03-18 01:49:13,822 | ERROR | simulator_app | Data load error: 'SimulatorDataClient' object has no attribute 'load_match_intelligence'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 19, in _worker
+    result = fn()
+             ^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 1995, in <lambda>
+    "match_intelligence": self.data_client.load_match_intelligence(home, away, self.current_competition),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SimulatorDataClient' object has no attribute 'load_match_intelligence'
+2026-03-18 01:50:23,840 | ERROR | simulator_app | Data load error: 'SimulatorDataClient' object has no attribute 'load_match_intelligence'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 19, in _worker
+    result = fn()
+             ^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 1995, in <lambda>
+    "match_intelligence": self.data_client.load_match_intelligence(home, away, self.current_competition),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'SimulatorDataClient' object has no attribute 'load_match_intelligence'
+2026-03-19 01:53:14,334 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute 'prediction_last_block'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2083, in _on_data_loaded
+    self.refresh_all_display()
+  File "C:\Project X\codex-environment-main\src\app.py", line 2128, in refresh_all_display
+    self.refresh_match_intelligence_panels()
+  File "C:\Project X\codex-environment-main\src\app.py", line 457, in refresh_match_intelligence_panels
+    self.prediction_summary_box.insert("end", self.prediction_last_block or self.prediction_label.cget("text") + "\n")
+                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'prediction_last_block'
+2026-03-19 01:53:30,296 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute 'prediction_last_block'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2083, in _on_data_loaded
+    self.refresh_all_display()
+  File "C:\Project X\codex-environment-main\src\app.py", line 2128, in refresh_all_display
+    self.refresh_match_intelligence_panels()
+  File "C:\Project X\codex-environment-main\src\app.py", line 457, in refresh_match_intelligence_panels
+    self.prediction_summary_box.insert("end", self.prediction_last_block or self.prediction_label.cget("text") + "\n")
+                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'prediction_last_block'
+2026-03-19 01:53:40,879 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute 'prediction_last_block'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2083, in _on_data_loaded
+    self.refresh_all_display()
+  File "C:\Project X\codex-environment-main\src\app.py", line 2128, in refresh_all_display
+    self.refresh_match_intelligence_panels()
+  File "C:\Project X\codex-environment-main\src\app.py", line 457, in refresh_match_intelligence_panels
+    self.prediction_summary_box.insert("end", self.prediction_last_block or self.prediction_label.cget("text") + "\n")
+                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'prediction_last_block'
+2026-03-19 01:53:50,136 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute 'prediction_last_block'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2602, in _on_selected_context_loaded
+    self.refresh_all_display()
+  File "C:\Project X\codex-environment-main\src\app.py", line 2128, in refresh_all_display
+    self.refresh_match_intelligence_panels()
+  File "C:\Project X\codex-environment-main\src\app.py", line 457, in refresh_match_intelligence_panels
+    self.prediction_summary_box.insert("end", self.prediction_last_block or self.prediction_label.cget("text") + "\n")
+                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'prediction_last_block'
+2026-03-19 01:53:54,542 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute 'prediction_last_block'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2602, in _on_selected_context_loaded
+    self.refresh_all_display()
+  File "C:\Project X\codex-environment-main\src\app.py", line 2128, in refresh_all_display
+    self.refresh_match_intelligence_panels()
+  File "C:\Project X\codex-environment-main\src\app.py", line 457, in refresh_match_intelligence_panels
+    self.prediction_summary_box.insert("end", self.prediction_last_block or self.prediction_label.cget("text") + "\n")
+                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'prediction_last_block'
+2026-03-19 01:54:02,201 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute 'prediction_last_block'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2293, in <lambda>
+    lambda result: self._apply_pre_match_data(home, away, result),
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 2369, in _apply_pre_match_data
+    self.refresh_all_display()
+  File "C:\Project X\codex-environment-main\src\app.py", line 2128, in refresh_all_display
+    self.refresh_match_intelligence_panels()
+  File "C:\Project X\codex-environment-main\src\app.py", line 457, in refresh_match_intelligence_panels
+    self.prediction_summary_box.insert("end", self.prediction_last_block or self.prediction_label.cget("text") + "\n")
+                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'prediction_last_block'
+2026-03-19 05:13:01,122 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute 'extract_prediction_verdict'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 3222, in _on_selected_context_loaded
+    self.prediction_last_verdict = self.extract_prediction_verdict(prediction_text)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'extract_prediction_verdict'
+2026-03-19 05:13:08,800 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute 'extract_prediction_verdict'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2874, in <lambda>
+    lambda result: self._apply_pre_match_data(home, away, result),
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 2941, in _apply_pre_match_data
+    self.prediction_last_verdict = self.extract_prediction_verdict(prediction_text)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'extract_prediction_verdict'
+2026-03-19 05:14:30,168 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute 'extract_prediction_verdict'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2874, in <lambda>
+    lambda result: self._apply_pre_match_data(home, away, result),
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 2941, in _apply_pre_match_data
+    self.prediction_last_verdict = self.extract_prediction_verdict(prediction_text)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'extract_prediction_verdict'
+2026-03-19 05:15:27,294 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute 'extract_prediction_verdict'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 3222, in _on_selected_context_loaded
+    self.prediction_last_verdict = self.extract_prediction_verdict(prediction_text)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'extract_prediction_verdict'
+2026-03-19 05:15:28,801 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute 'extract_prediction_verdict'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2874, in <lambda>
+    lambda result: self._apply_pre_match_data(home, away, result),
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 2941, in _apply_pre_match_data
+    self.prediction_last_verdict = self.extract_prediction_verdict(prediction_text)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'extract_prediction_verdict'
+2026-03-19 05:16:34,685 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute 'extract_prediction_verdict'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2874, in <lambda>
+    lambda result: self._apply_pre_match_data(home, away, result),
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Project X\codex-environment-main\src\app.py", line 2941, in _apply_pre_match_data
+    self.prediction_last_verdict = self.extract_prediction_verdict(prediction_text)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'extract_prediction_verdict'

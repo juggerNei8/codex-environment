@@ -1,204 +1,155 @@
 import json
 import threading
 import time
-from typing import Any, Callable, Dict, Optional
+from typing import Callable, Optional
 
-try:
-    import websocket  # websocket-client
-except ImportError as exc:  # pragma: no cover
-    raise ImportError(
-        "websocket-client is required. Install it with: pip install websocket-client"
-    ) from exc
+import websocket
 
 
-MessageHandler = Callable[[Dict[str, Any]], None]
-StatusHandler = Callable[[str], None]
-ErrorHandler = Callable[[Exception], None]
-
-
-class SimulatorLiveClient:
+class SimulatorWebSocketClient:
     """
-    Drop-in WebSocket client for subscribing to live match updates from simvision_api.
+    Live update client for the simulator.
 
     What it does:
-    - connects to /realtime/ws/{match_id}
-    - keeps the connection alive in a background thread
-    - auto-reconnects when the server drops
-    - forwards parsed JSON messages to your callback
-
-    Where to use it:
-    - inside the simulator dashboard controller
-    - inside any live match monitor module
-
-    Why it matters:
-    - lets simulator.exe receive push updates instead of polling repeatedly
+    - Connects to the analytics API WebSocket endpoint
+    - Receives JSON live updates
+    - Reconnects automatically if disconnected
+    - Runs in a background thread
     """
 
     def __init__(
         self,
         ws_base_url: str,
         match_id: str,
-        on_message: Optional[MessageHandler] = None,
-        on_status: Optional[StatusHandler] = None,
-        on_error: Optional[ErrorHandler] = None,
+        on_message: Optional[Callable[[dict], None]] = None,
+        on_status: Optional[Callable[[str], None]] = None,
         reconnect_delay: float = 3.0,
-        heartbeat_timeout: float = 30.0,
-    ) -> None:
+    ):
         self.ws_base_url = ws_base_url.rstrip("/")
         self.match_id = match_id
-        self.on_message = on_message or self._default_message_handler
-        self.on_status = on_status or self._default_status_handler
-        self.on_error = on_error or self._default_error_handler
+        self.on_message = on_message
+        self.on_status = on_status
         self.reconnect_delay = reconnect_delay
-        self.heartbeat_timeout = heartbeat_timeout
 
-        self._ws: Optional[websocket.WebSocketApp] = None
-        self._thread: Optional[threading.Thread] = None
-        self._running = False
-        self._last_message_at = 0.0
-        self._lock = threading.Lock()
+        self.ws = None
+        self.thread = None
+        self._stop_event = threading.Event()
+        self._connected = False
 
-    @property
-    def ws_url(self) -> str:
-        return f"{self.ws_base_url}/realtime/ws/{self.match_id}"
-
-    def start(self) -> None:
-        """Start the client in a background thread."""
-        with self._lock:
-            if self._running:
-                return
-            self._running = True
-
-        self._thread = threading.Thread(target=self._run_forever, daemon=True)
-        self._thread.start()
-        self.on_status(f"starting: {self.ws_url}")
-
-    def stop(self) -> None:
-        """Stop the client cleanly."""
-        with self._lock:
-            self._running = False
-
-        if self._ws is not None:
+    def _notify_status(self, status: str) -> None:
+        if self.on_status:
             try:
-                self._ws.close()
-            except Exception:
-                pass
-
-        self.on_status("stopped")
-
-    def is_running(self) -> bool:
-        with self._lock:
-            return self._running
-
-    def _run_forever(self) -> None:
-        while self.is_running():
-            try:
-                self._connect_once()
+                self.on_status(status)
             except Exception as exc:
-                self.on_error(exc)
+                print(f"[ws-status-callback-error] {exc}")
+        else:
+            print(f"[ws-status] {status}")
 
-            if self.is_running():
-                self.on_status(f"reconnecting in {self.reconnect_delay:.1f}s")
-                time.sleep(self.reconnect_delay)
-
-    def _connect_once(self) -> None:
-        self._last_message_at = time.time()
-
-        def _on_open(ws: websocket.WebSocketApp) -> None:
-            self.on_status(f"connected: {self.match_id}")
-            self._last_message_at = time.time()
-
-        def _on_message(ws: websocket.WebSocketApp, message: str) -> None:
-            self._last_message_at = time.time()
-            payload = self._parse_message(message)
-            self.on_message(payload)
-
-        def _on_error(ws: websocket.WebSocketApp, error: Any) -> None:
-            if isinstance(error, Exception):
-                self.on_error(error)
-            else:
-                self.on_error(Exception(str(error)))
-
-        def _on_close(
-            ws: websocket.WebSocketApp,
-            close_status_code: Optional[int],
-            close_msg: Optional[str],
-        ) -> None:
-            self.on_status(
-                f"disconnected: code={close_status_code}, reason={close_msg or 'n/a'}"
-            )
-
-        self._ws = websocket.WebSocketApp(
-            self.ws_url,
-            on_open=_on_open,
-            on_message=_on_message,
-            on_error=_on_error,
-            on_close=_on_close,
-        )
-
-        heartbeat_thread = threading.Thread(target=self._heartbeat_watchdog, daemon=True)
-        heartbeat_thread.start()
-
-        self._ws.run_forever(ping_interval=15, ping_timeout=5)
-
-    def _heartbeat_watchdog(self) -> None:
-        while self.is_running() and self._ws is not None:
-            time.sleep(5)
-            elapsed = time.time() - self._last_message_at
-            if elapsed > self.heartbeat_timeout:
-                self.on_status("heartbeat timeout reached, closing socket")
-                try:
-                    self._ws.close()
-                except Exception:
-                    pass
-                return
-
-    @staticmethod
-    def _parse_message(message: str) -> Dict[str, Any]:
+    def _handle_message(self, message: str) -> None:
         try:
             payload = json.loads(message)
-            if isinstance(payload, dict):
-                return payload
-            return {"type": "raw", "payload": payload}
         except json.JSONDecodeError:
-            return {"type": "raw", "payload": message}
+            payload = {"type": "raw_message", "message": message}
 
-    @staticmethod
-    def _default_message_handler(payload: Dict[str, Any]) -> None:
-        print("[live-update]", json.dumps(payload, indent=2, ensure_ascii=False))
+        if self.on_message:
+            try:
+                self.on_message(payload)
+            except Exception as exc:
+                print(f"[ws-message-callback-error] {exc}")
+        else:
+            print("[ws-message]", payload)
 
-    @staticmethod
-    def _default_status_handler(status: str) -> None:
-        print(f"[ws-status] {status}")
+    def _build_ws_url(self) -> str:
+        return f"{self.ws_base_url}/realtime/ws/{self.match_id}"
 
-    @staticmethod
-    def _default_error_handler(error: Exception) -> None:
-        print(f"[ws-error] {error}")
+    def _run_forever(self) -> None:
+        while not self._stop_event.is_set():
+            ws_url = self._build_ws_url()
+            self._notify_status(f"connecting -> {ws_url}")
+
+            try:
+                self.ws = websocket.WebSocketApp(
+                    ws_url,
+                    on_open=self._on_open,
+                    on_message=self._on_message,
+                    on_error=self._on_error,
+                    on_close=self._on_close,
+                )
+                self.ws.run_forever()
+            except Exception as exc:
+                self._notify_status(f"connection exception: {exc}")
+
+            if not self._stop_event.is_set():
+                self._notify_status(
+                    f"disconnected, retrying in {self.reconnect_delay} seconds"
+                )
+                time.sleep(self.reconnect_delay)
+
+    def _on_open(self, ws):
+        self._connected = True
+        self._notify_status("connected")
+
+    def _on_message(self, ws, message):
+        self._handle_message(message)
+
+    def _on_error(self, ws, error):
+        self._connected = False
+        self._notify_status(f"error: {error}")
+
+    def _on_close(self, ws, close_status_code, close_msg):
+        self._connected = False
+        self._notify_status(
+            f"closed: code={close_status_code}, message={close_msg}"
+        )
+
+    def start(self) -> None:
+        if self.thread and self.thread.is_alive():
+            self._notify_status("already running")
+            return
+
+        self._stop_event.clear()
+        self.thread = threading.Thread(target=self._run_forever, daemon=True)
+        self.thread.start()
+        self._notify_status("background listener started")
+
+    def stop(self) -> None:
+        self._stop_event.set()
+
+        if self.ws:
+            try:
+                self.ws.close()
+            except Exception as exc:
+                self._notify_status(f"close error: {exc}")
+
+        self._notify_status("stopped")
+
+    @property
+    def is_connected(self) -> bool:
+        return self._connected
 
 
 def subscribe_to_live_updates(
     ws_base_url: str,
     match_id: str,
-    on_message: Optional[MessageHandler] = None,
-    on_status: Optional[StatusHandler] = None,
-    on_error: Optional[ErrorHandler] = None,
-) -> SimulatorLiveClient:
+    on_message: Optional[Callable[[dict], None]] = None,
+    on_status: Optional[Callable[[str], None]] = None,
+) -> SimulatorWebSocketClient:
     """
-    Convenience wrapper for immediate simulator use.
+    Convenience helper.
 
     Example:
         client = subscribe_to_live_updates(
-            "ws://127.0.0.1:8000",
-            "video_demo",
+            ws_base_url="ws://127.0.0.1:8000",
+            match_id="video_demo",
             on_message=handle_live_message,
+            on_status=handle_ws_status,
         )
     """
-    client = SimulatorLiveClient(
+    client = SimulatorWebSocketClient(
         ws_base_url=ws_base_url,
         match_id=match_id,
         on_message=on_message,
         on_status=on_status,
-        on_error=on_error,
     )
     client.start()
     return client

@@ -8,7 +8,6 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
@@ -41,7 +40,7 @@ from sim_integration.tk_helpers import run_in_background
 
 logger = get_logger("simulator_app", "simulator_app.log")
 
-APP_VERSION = "v1.5.4"
+APP_VERSION = "v1.6.0"
 APP_COPYRIGHT = "© 2026 JuggerNei8 Football Simulator"
 
 TRACKING_HTTP_BASE_URL = "http://127.0.0.1:8000"
@@ -51,7 +50,6 @@ DEFAULT_TRACKING_MATCH_ID = "video_demo"
 TRACKING_STATUS_POLL_MS = 15000
 TRACKING_MIN_HTTP_REFRESH_SECONDS = 8.0
 TRACKING_HTTP_TIMEOUT_SECONDS = 5.0
-
 SIMVISION_PROJECT_ROOT = Path(r"C:\Project X\simvision_api")
 
 LEAGUE_OPTIONS = {
@@ -208,158 +206,6 @@ class EmbeddedTrackingWebSocketClient:
         return self._connected
 
 
-class TrackingArtifactBridge:
-    def __init__(self, project_root: str | Path, match_id: str):
-        self.project_root = Path(project_root)
-        self.match_id = match_id
-        self.job_dir = self.project_root / "outputs" / "video" / "jobs" / self.match_id
-
-    @property
-    def tracking_output_path(self) -> Path:
-        return self.job_dir / "tracking_output.json"
-
-    @property
-    def pitch_map_path(self) -> Path:
-        return self.job_dir / "pitch_map.json"
-
-    @property
-    def calibration_points_path(self) -> Path:
-        return self.job_dir / "calibration_points.json"
-
-    @property
-    def calibration_preview_path(self) -> Path:
-        return self.job_dir / "calibration_preview.jpg"
-
-    @property
-    def frames_dir(self) -> Path:
-        return self.job_dir / "frames"
-
-    def _read_json(self, path: Path):
-        if not path.exists():
-            return {}
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
-
-    def frames_exported(self) -> int:
-        if not self.frames_dir.exists():
-            return 0
-        return len(list(self.frames_dir.glob("frame_*.jpg")))
-
-    def tracking_summary(self):
-        payload = self._read_json(self.tracking_output_path)
-        if not payload:
-            return {
-                "available": False,
-                "processor": "unknown",
-                "status": "missing",
-                "frames_processed": 0,
-                "player_tracks": 0,
-                "ball_tracks": 0,
-                "home_team_tracks": 0,
-                "away_team_tracks": 0,
-                "official_tracks": 0,
-                "goalkeeper_candidates": 0,
-            }
-        return {
-            "available": True,
-            "processor": payload.get("processor", "unknown"),
-            "status": payload.get("status", "unknown"),
-            "frames_processed": payload.get("frames_processed", 0),
-            "player_tracks": payload.get("player_tracks", 0),
-            "ball_tracks": payload.get("ball_tracks", 0),
-            "home_team_tracks": payload.get("home_team_tracks", 0),
-            "away_team_tracks": payload.get("away_team_tracks", 0),
-            "official_tracks": payload.get("official_tracks", 0),
-            "goalkeeper_candidates": payload.get("goalkeeper_candidates", 0),
-        }
-
-    def pitch_summary(self):
-        payload = self._read_json(self.pitch_map_path)
-        if not payload:
-            return {
-                "available": False,
-                "method": "unknown",
-                "calibration_used": False,
-                "mapped_points": 0,
-                "orientation_confidence": 0.0,
-            }
-        return {
-            "available": True,
-            "method": payload.get("method", "unknown"),
-            "calibration_used": payload.get("calibration_used", False),
-            "mapped_points": payload.get("mapped_points", 0),
-            "orientation_confidence": payload.get("orientation", {}).get("confidence", 0.0),
-        }
-
-    def calibration_summary(self):
-        payload = self._read_json(self.calibration_points_path)
-        return {
-            "available": bool(payload),
-            "frame_path": payload.get("frame_path", ""),
-            "preview_exists": self.calibration_preview_path.exists(),
-        }
-
-    def headline(self):
-        t = self.tracking_summary()
-        p = self.pitch_summary()
-        c = self.calibration_summary()
-        f = self.frames_exported()
-        readiness = 0
-        readiness += 30 if t["available"] else 0
-        readiness += 30 if p["available"] else 0
-        readiness += 20 if c["available"] else 0
-        readiness += 20 if f > 0 else 0
-        return {
-            "readiness": readiness,
-            "frames_exported": f,
-            "tracking_ready": t["available"],
-            "pitch_ready": p["available"],
-            "calibration_ready": c["available"],
-        }
-
-
-class ScrollablePage(tk.Frame):
-    def __init__(self, master, *, bg: str):
-        super().__init__(master, bg=bg)
-
-        self.canvas = tk.Canvas(self, bg=bg, highlightthickness=0, bd=0)
-        self.canvas.pack(fill="both", expand=True)
-
-        self.content = tk.Frame(self.canvas, bg=bg)
-        self.content_window = self.canvas.create_window((0, 0), window=self.content, anchor="nw")
-
-        self.canvas.bind("<Configure>", self._on_canvas_configure)
-        self.content.bind("<Configure>", self._on_content_configure)
-
-        for widget in (self.canvas, self.content):
-            widget.bind("<MouseWheel>", self._on_mousewheel, add="+")
-            widget.bind("<Button-4>", self._on_mousewheel, add="+")
-            widget.bind("<Button-5>", self._on_mousewheel, add="+")
-
-    def _on_canvas_configure(self, event):
-        self.canvas.itemconfigure(self.content_window, width=event.width)
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-
-    def _on_content_configure(self, _event):
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-
-    def _on_mousewheel(self, event):
-        delta = 0
-        if getattr(event, "delta", 0):
-            delta = int(-1 * (event.delta / 120))
-        elif getattr(event, "num", None) == 4:
-            delta = -1
-        elif getattr(event, "num", None) == 5:
-            delta = 1
-        if delta:
-            self.canvas.yview_scroll(delta, "units")
-
-    def scroll_to_top(self):
-        self.canvas.yview_moveto(0.0)
-
-
 class FootballSimulator:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -419,9 +265,6 @@ class FootballSimulator:
         self.fixtures = []
         self.standings = []
         self.news_items = []
-        self.bookmarked_games = []
-        self.selected_match_details = {}
-        self.match_history_context = {}
         self.live_games = {}
         self.odds_markets = {}
         self.bet365_prematch = {}
@@ -431,20 +274,6 @@ class FootballSimulator:
         self.away_form_data = {}
         self.export_status = {}
         self.backend_usage = {}
-
-        self.team_advanced_form = {}
-        self.probable_lineups = {}
-        self.injury_report = {}
-        self.rest_profile = {}
-        self.odds_movement = {}
-        self.live_match_events = {}
-        self.player_form = {}
-        self.tactical_matchup = {}
-
-        self.prediction_last_block = ""
-        self.prediction_last_scoreline = "Scoreline tendency: waiting"
-        self.prediction_last_verdict = "Likely winner: waiting"
-        self.post_match_summary_text = "Post-match intelligence waiting"
 
         self.tracking_match_id = DEFAULT_TRACKING_MATCH_ID
         self.tracking_http_base_url = TRACKING_HTTP_BASE_URL
@@ -457,7 +286,13 @@ class FootballSimulator:
         self.tracking_http_refresh_inflight = False
         self.tracking_last_http_refresh_ts = 0.0
         self.tracking_status_loop_id = None
-        self.tracking_bridge = TrackingArtifactBridge(SIMVISION_PROJECT_ROOT, self.tracking_match_id)
+        self.live_analysis_payload = {}
+        self.live_analysis_status = "not requested"
+        self.live_metrics_payload = {}
+        self.live_metrics_status = "not requested"
+        self.live_tactical_payload = {}
+        self.live_tactical_status = "not requested"
+        self.match_intelligence_status = "not requested"
 
         self.build_ui()
         self.auto_load_background_defaults()
@@ -480,291 +315,6 @@ class FootballSimulator:
         self.schedule_tracking_status_loop()
 
         self.root.protocol("WM_DELETE_WINDOW", self.quit_app)
-
-    def _now_clock_text(self):
-        return datetime.now().strftime("%H:%M:%S")
-
-    def _stamp_or_dash(self, value):
-        return value or "--:--:--"
-
-    def _freshness_label(self, value):
-        if not value:
-            return "never"
-        try:
-            last_dt = datetime.strptime(value, "%H:%M:%S")
-            now_dt = datetime.now().replace(
-                hour=last_dt.hour,
-                minute=last_dt.minute,
-                second=last_dt.second,
-                microsecond=0,
-            )
-            delta = (datetime.now() - now_dt).total_seconds()
-        except Exception:
-            return value
-        return "fresh" if delta <= 30 else "stale"
-
-    def _confidence_from_flags(self, tracking_ready=False, pitch_ready=False, 
-        calibration_ready=False):
-        if tracking_ready and pitch_ready and calibration_ready:
-            return "HIGH"
-        if tracking_ready and pitch_ready:
-            return "MEDIUM"
-        return "LOW"
-
-    def _status_color(self, status_text: str):
-        lowered = (status_text or "").lower()
-        if "error" in lowered or "fail" in lowered:
-            return "#f97316"
-        if "refreshing" in lowered or "waiting" in lowered:
-            return "#fbbf24"
-        if "ok" in lowered or "ready" in lowered or "fresh" in lowered or "available=true" in lowered:
-            return "#22c55e"
-        return self.text_fg
-
-    def build_match_center_panels(self, parent):
-        self.match_center_container = self.make_card(parent, "Match Center")
-        self.match_center_container.pack(fill="both", expand=True, pady=(0, 8))
-
-        self.match_center_notebook = ttk.Notebook(self.match_center_container)
-        self.match_center_notebook.pack(fill="both", expand=True)
-
-        self.match_center_overview_tab = tk.Frame(self.match_center_notebook, bg=self.card_bg)
-        self.match_center_notebook.add(self.match_center_overview_tab, text="Overview")
-
-        self.match_center_history_tab = tk.Frame(self.match_center_notebook, bg=self.card_bg)
-        self.match_center_notebook.add(self.match_center_history_tab, text="History")
-
-        self.live_games_box = self._make_text_panel(self.match_center_overview_tab, "Live Ongoing Games", 6)
-        self.scheduled_games_box = self._make_text_panel(self.match_center_overview_tab, "Scheduled Games", 6)
-        self.bookmarked_games_box = self._make_text_panel(self.match_center_overview_tab, "Bookmarked Games", 5)
-        self.selected_match_details_box = self._make_text_panel(self.match_center_overview_tab, "Selected Match Details", 6)
-        self.history_context_box = self._make_text_panel(self.match_center_history_tab, "History Context", 12)
-
-    def _fixture_datetime_text(self, fixture):
-        value = ""
-        if isinstance(fixture, dict):
-            value = str(fixture.get("utcDate") or fixture.get("date") or fixture.get("start_time") or "").strip()
-        return value or "unknown"
-
-    def _find_selected_fixture(self, home, away):
-        upcoming = None
-        fallback = None
-        for fx in self.fixtures or []:
-            if not isinstance(fx, dict):
-                continue
-            fx_home = str(fx.get("home", "")).strip()
-            fx_away = str(fx.get("away", "")).strip()
-            if fx_home != home or fx_away != away:
-                continue
-            status = str(fx.get("status", "")).upper()
-            if status not in {"FINISHED", "FT"} and upcoming is None:
-                upcoming = fx
-            if fallback is None:
-                fallback = fx
-        return upcoming or fallback or {}
-
-    def _build_bookmarked_games(self):
-        scheduled = self.live_games.get("scheduled_with_odds", []) if isinstance(self.live_games, dict) else []
-        picks = []
-        for row in scheduled[:5]:
-            if isinstance(row, dict):
-                picks.append(row)
-        home = self.home_box.get().strip() if hasattr(self, "home_box") else ""
-        away = self.away_box.get().strip() if hasattr(self, "away_box") else ""
-        if home and away:
-            picks.insert(0, {"home": home, "away": away, "status": "selected", "start_time": ""})
-        self.bookmarked_games = picks[:5]
-
-    def _build_match_history_context(self, home, away):
-        home_recent = []
-        away_recent = []
-        h2h = []
-        for fx in self.fixtures or []:
-            if not isinstance(fx, dict):
-                continue
-            fx_home = str(fx.get("home", "")).strip()
-            fx_away = str(fx.get("away", "")).strip()
-            if home in (fx_home, fx_away):
-                home_recent.append(fx)
-            if away in (fx_home, fx_away):
-                away_recent.append(fx)
-            if {home, away} == {fx_home, fx_away}:
-                h2h.append(fx)
-        self.match_history_context = {
-            "home_recent": home_recent[:5],
-            "away_recent": away_recent[:5],
-            "h2h": h2h[:5],
-        }
-
-    def refresh_match_center_panels(self):
-        home = self.home_box.get().strip() if hasattr(self, "home_box") else ""
-        away = self.away_box.get().strip() if hasattr(self, "away_box") else ""
-
-        self._build_bookmarked_games()
-        selected_fx = self._find_selected_fixture(home, away) if home and away else {}
-        self.selected_match_details = selected_fx or {}
-        if home and away:
-            self._build_match_history_context(home, away)
-
-        if hasattr(self, "live_games_box"):
-            self.live_games_box.delete("1.0", "end")
-            live_matches = self.live_games.get("live_matches", []) if isinstance(self.live_games, dict) else []
-            if live_matches:
-                for row in live_matches[:10]:
-                    self.live_games_box.insert(
-                        "end",
-                        f"{row.get('home','')} {row.get('score_home','?')}-{row.get('score_away','?')} {row.get('away','')}  {row.get('minute','')}\n",
-                    )
-            else:
-                self.live_games_box.insert("end", "No live ongoing games loaded.\n")
-
-        if hasattr(self, "scheduled_games_box"):
-            self.scheduled_games_box.delete("1.0", "end")
-            scheduled = self.live_games.get("scheduled_with_odds", []) if isinstance(self.live_games, dict) else []
-            if scheduled:
-                for row in scheduled[:10]:
-                    self.scheduled_games_box.insert(
-                        "end",
-                        f"{row.get('home','')} vs {row.get('away','')} | {row.get('status','')} | {row.get('start_time','')}\n",
-                    )
-            else:
-                self.scheduled_games_box.insert("end", "No scheduled games loaded.\n")
-
-        if hasattr(self, "bookmarked_games_box"):
-            self.bookmarked_games_box.delete("1.0", "end")
-            if self.bookmarked_games:
-                for row in self.bookmarked_games:
-                    self.bookmarked_games_box.insert(
-                        "end",
-                        f"{row.get('home','')} vs {row.get('away','')} | {row.get('status','')} | {row.get('start_time','')}\n",
-                    )
-            else:
-                self.bookmarked_games_box.insert("end", "No bookmarked games yet.\n")
-
-        if hasattr(self, "selected_match_details_box"):
-            self.selected_match_details_box.delete("1.0", "end")
-            if self.selected_match_details:
-                fx = self.selected_match_details
-                self.selected_match_details_box.insert("end", f"Home: {fx.get('home', home)}\n")
-                self.selected_match_details_box.insert("end", f"Away: {fx.get('away', away)}\n")
-                self.selected_match_details_box.insert("end", f"Competition: {self.current_competition}\n")
-                self.selected_match_details_box.insert("end", f"Date/Time: {self._fixture_datetime_text(fx)}\n")
-                self.selected_match_details_box.insert("end", f"Status: {fx.get('status', 'unknown')}\n")
-                self.selected_match_details_box.insert("end", f"Venue: {fx.get('venue', fx.get('stadium', 'unknown'))}\n")
-                self.selected_match_details_box.insert("end", f"{self.prediction_engine.build_odds_caption(self.selected_fixture_odds)}\n")
-            else:
-                self.selected_match_details_box.insert("end", "Select teams to view incoming match details.\n")
-
-        if hasattr(self, "history_context_box"):
-            self.history_context_box.delete("1.0", "end")
-            if self.match_history_context:
-                self.history_context_box.insert("end", "Home recent:\n")
-                for fx in self.match_history_context.get("home_recent", []):
-                    self.history_context_box.insert("end", f"- {fx.get('home','')} vs {fx.get('away','')} | {fx.get('status','')} | {self._fixture_datetime_text(fx)}\n")
-                self.history_context_box.insert("end", "\nAway recent:\n")
-                for fx in self.match_history_context.get("away_recent", []):
-                    self.history_context_box.insert("end", f"- {fx.get('home','')} vs {fx.get('away','')} | {fx.get('status','')} | {self._fixture_datetime_text(fx)}\n")
-                self.history_context_box.insert("end", "\nHead-to-head:\n")
-                for fx in self.match_history_context.get("h2h", []):
-                    self.history_context_box.insert("end", f"- {fx.get('home','')} vs {fx.get('away','')} | {fx.get('status','')} | {self._fixture_datetime_text(fx)}\n")
-            else:
-                self.history_context_box.insert("end", "History context waiting.\n")
-
-    def refresh_above_fold_panels(self):
-        if hasattr(self, "fold_prediction_label"):
-            line = "Prediction waiting"
-            if self.prediction_last_block:
-                line = self.prediction_last_block.splitlines()[0]
-            elif hasattr(self, "prediction_label"):
-                line = self.prediction_label.cget("text")
-            self.fold_prediction_label.config(text=line)
-        if hasattr(self, "fold_verdict_label"):
-            self.fold_verdict_label.config(text=self.prediction_last_verdict or "Likely winner: waiting")
-        if hasattr(self, "fold_scoreline_label"):
-            self.fold_scoreline_label.config(text=self.prediction_last_scoreline or "Scoreline tendency: waiting")
-        if hasattr(self, "fold_xg_label"):
-            home_adv = self.team_advanced_form.get("home", {}) if isinstance(self.team_advanced_form, dict) else {}
-            away_adv = self.team_advanced_form.get("away", {}) if isinstance(self.team_advanced_form, dict) else {}
-            self.fold_xg_label.config(text=f"H xG {home_adv.get('xg_for_5', home_adv.get('xg_for', '-'))} | A xG {away_adv.get('xg_for_5', away_adv.get('xg_for', '-'))}")
-        if hasattr(self, "fold_market_label"):
-            direction = self.odds_movement.get("direction", "market waiting") if isinstance(self.odds_movement, dict) else "market waiting"
-            self.fold_market_label.config(text=direction)
-
-    def refresh_match_intelligence_panels(self):
-        if hasattr(self, "prediction_summary_box"):
-            self.prediction_summary_box.delete("1.0", "end")
-            self.prediction_summary_box.insert("end", self.prediction_last_block or self.prediction_label.cget("text") + "\n")
-        if hasattr(self, "verdict_box"):
-            self.verdict_box.delete("1.0", "end")
-            self.verdict_box.insert("end", (self.prediction_last_verdict or "Likely winner: waiting") + "\n")
-        if hasattr(self, "scoreline_box"):
-            self.scoreline_box.delete("1.0", "end")
-            self.scoreline_box.insert("end", (self.prediction_last_scoreline or "Scoreline tendency: waiting") + "\n")
-        self.refresh_above_fold_panels()
-
-        if hasattr(self, "xg_box"):
-            self.xg_box.delete("1.0", "end")
-            home_adv = self.team_advanced_form.get("home", {}) if isinstance(self.team_advanced_form, dict) else {}
-            away_adv = self.team_advanced_form.get("away", {}) if isinstance(self.team_advanced_form, dict) else {}
-            self.xg_box.insert("end", f"Home xG: {home_adv.get('xg_for_5', home_adv.get('xg_for', '-'))}\n")
-            self.xg_box.insert("end", f"Home xGA: {home_adv.get('xga_5', home_adv.get('xga', '-'))}\n")
-            self.xg_box.insert("end", f"Away xG: {away_adv.get('xg_for_5', away_adv.get('xg_for', '-'))}\n")
-            self.xg_box.insert("end", f"Away xGA: {away_adv.get('xga_5', away_adv.get('xga', '-'))}\n")
-
-        if hasattr(self, "lineup_box"):
-            self.lineup_box.delete("1.0", "end")
-            home_line = self.probable_lineups.get("home", {}) if isinstance(self.probable_lineups, dict) else {}
-            away_line = self.probable_lineups.get("away", {}) if isinstance(self.probable_lineups, dict) else {}
-            self.lineup_box.insert("end", f"Home formation: {home_line.get('formation', '-')}\n")
-            self.lineup_box.insert("end", f"Home strength: {home_line.get('strength_score', '-')}\n")
-            self.lineup_box.insert("end", f"Away formation: {away_line.get('formation', '-')}\n")
-            self.lineup_box.insert("end", f"Away strength: {away_line.get('strength_score', '-')}\n")
-            self.lineup_box.insert("end", f"Home missing key: {home_line.get('key_absent_count', '-')}\n")
-            self.lineup_box.insert("end", f"Away missing key: {away_line.get('key_absent_count', '-')}\n")
-
-        if hasattr(self, "injuries_box"):
-            self.injuries_box.delete("1.0", "end")
-            home_inj = self.injury_report.get("home", {}) if isinstance(self.injury_report, dict) else {}
-            away_inj = self.injury_report.get("away", {}) if isinstance(self.injury_report, dict) else {}
-            self.injuries_box.insert("end", f"Home injury impact: {home_inj.get('impact_score', '-')}\n")
-            self.injuries_box.insert("end", f"Home injured: {home_inj.get('injured_count', '-')}\n")
-            self.injuries_box.insert("end", f"Home suspended: {home_inj.get('suspended_count', '-')}\n")
-            self.injuries_box.insert("end", f"Away injury impact: {away_inj.get('impact_score', '-')}\n")
-            self.injuries_box.insert("end", f"Away injured: {away_inj.get('injured_count', '-')}\n")
-            self.injuries_box.insert("end", f"Away suspended: {away_inj.get('suspended_count', '-')}\n")
-
-        if hasattr(self, "fatigue_box"):
-            self.fatigue_box.delete("1.0", "end")
-            home_rest = self.rest_profile.get("home", {}) if isinstance(self.rest_profile, dict) else {}
-            away_rest = self.rest_profile.get("away", {}) if isinstance(self.rest_profile, dict) else {}
-            self.fatigue_box.insert("end", f"Home days rest: {home_rest.get('days_rest', '-')}\n")
-            self.fatigue_box.insert("end", f"Home fatigue: {home_rest.get('fatigue_score', '-')}\n")
-            self.fatigue_box.insert("end", f"Away days rest: {away_rest.get('days_rest', '-')}\n")
-            self.fatigue_box.insert("end", f"Away fatigue: {away_rest.get('fatigue_score', '-')}\n")
-
-        if hasattr(self, "market_box"):
-            self.market_box.delete("1.0", "end")
-            self.market_box.insert("end", f"Home move %: {self.odds_movement.get('home_move_pct', '-')}\n")
-            self.market_box.insert("end", f"Away move %: {self.odds_movement.get('away_move_pct', '-')}\n")
-            self.market_box.insert("end", f"Direction: {self.odds_movement.get('direction', '-')}\n")
-            self.market_box.insert("end", f"{self.prediction_engine.build_odds_caption(self.selected_fixture_odds)}\n")
-
-        if hasattr(self, "tactical_box"):
-            self.tactical_box.delete("1.0", "end")
-            self.tactical_box.insert("end", f"Home tactical edge: {self.tactical_matchup.get('home_edge_score', '-')}\n")
-            self.tactical_box.insert("end", f"Away tactical edge: {self.tactical_matchup.get('away_edge_score', '-')}\n")
-            notes = self.tactical_matchup.get("notes", []) if isinstance(self.tactical_matchup, dict) else []
-            for note in notes[:3]:
-                self.tactical_box.insert("end", f"- {note}\n")
-
-        if hasattr(self, "player_form_box"):
-            self.player_form_box.delete("1.0", "end")
-            home_pf = self.player_form.get("home", {}) if isinstance(self.player_form, dict) else {}
-            away_pf = self.player_form.get("away", {}) if isinstance(self.player_form, dict) else {}
-            self.player_form_box.insert("end", f"Home attack form: {home_pf.get('attack_form', '-')}\n")
-            self.player_form_box.insert("end", f"Home defense form: {home_pf.get('defense_form', '-')}\n")
-            self.player_form_box.insert("end", f"Away attack form: {away_pf.get('attack_form', '-')}\n")
-            self.player_form_box.insert("end", f"Away defense form: {away_pf.get('defense_form', '-')}\n")
 
     # ------------------------------------------------
     # UI SHELL
@@ -952,19 +502,8 @@ class FootballSimulator:
 
     def build_pages(self):
         self.pages = {}
-        self.page_bodies = {}
-
-        for name in [
-            "live_match",
-            "post_match",
-            "team_overview",
-            "player_stats",
-            "settings_home",
-            "personalization",
-        ]:
-            page = ScrollablePage(self.page_host, bg=self.theme_bg)
-            self.pages[name] = page
-            self.page_bodies[name] = page.content
+        for name in ["live_match", "post_match", "team_overview", "player_stats", "settings_home", "personalization"]:
+            self.pages[name] = tk.Frame(self.page_host, bg=self.theme_bg)
 
         self.build_live_match_page()
         self.build_post_match_page()
@@ -979,10 +518,6 @@ class FootballSimulator:
 
         self.current_page = page_name
         self.pages[page_name].pack(fill="both", expand=True)
-
-        if hasattr(self.pages[page_name], "scroll_to_top"):
-            self.pages[page_name].scroll_to_top()
-
         self.highlight_nav()
         self.root.after(30, self._apply_full_page_background)
         self.root.after(50, self.apply_background_images)
@@ -1265,7 +800,7 @@ class FootballSimulator:
     # ------------------------------------------------
 
     def build_live_match_page(self):
-        page = self.page_bodies["live_match"]
+        page = self.pages["live_match"]
 
         top = tk.Frame(page, bg=self.theme_bg)
         top.pack(fill="x", padx=12, pady=(12, 8))
@@ -1299,8 +834,6 @@ class FootballSimulator:
         )
         self.live_bg_banner.pack(fill="x", padx=12, pady=(0, 12))
 
-        self.build_above_fold_summary_strip(page)
-
         body = tk.Frame(page, bg=self.theme_bg)
         body.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
@@ -1318,24 +851,6 @@ class FootballSimulator:
         self.build_live_left_column()
         self.build_live_center_column()
         self.build_live_right_column()
-
-    def build_above_fold_summary_strip(self, parent):
-        row = tk.Frame(parent, bg=self.theme_bg)
-        row.pack(fill="x", padx=12, pady=(0, 10))
-
-        def make_fold_card(title: str):
-            card = tk.Frame(row, bg="#0f172a", highlightthickness=1, highlightbackground="#26354f", bd=0)
-            card.pack(side="left", fill="both", expand=True, padx=4)
-            tk.Label(card, text=title, bg="#0f172a", fg=self.accent2, font=(self.font_family, max(9, self.body_font_size - 1), "bold")).pack(anchor="w", padx=8, pady=(6, 2))
-            label = tk.Label(card, text="waiting", bg="#0f172a", fg=self.text_fg, justify="left", wraplength=220, anchor="w")
-            label.pack(fill="both", expand=True, padx=8, pady=(0, 8))
-            return label
-
-        self.fold_prediction_label = make_fold_card("Prediction")
-        self.fold_verdict_label = make_fold_card("Likely Winner")
-        self.fold_scoreline_label = make_fold_card("Scoreline")
-        self.fold_xg_label = make_fold_card("xG Snapshot")
-        self.fold_market_label = make_fold_card("Market")
 
     def build_live_left_column(self):
         card = self.make_card(self.live_left, "Match Controls")
@@ -1491,25 +1006,17 @@ class FootballSimulator:
         self.odds_card_draw_value = self._make_odds_box(odds_row, "DRAW")
         self.odds_card_away_value = self._make_odds_box(odds_row, "AWAY")
 
-        self.prediction_summary_box = self._make_text_panel(self.live_right, "Prediction Summary", 5)
-        self.verdict_box = self._make_text_panel(self.live_right, "Likely Winner", 3)
-        self.scoreline_box = self._make_text_panel(self.live_right, "Scoreline Tendency", 3)
-        self.xg_box = self._make_text_panel(self.live_right, "xG / xGA", 4)
-        self.market_box = self._make_text_panel(self.live_right, "Ongoing Market", 4)
-
-        self.live_box = self._make_text_panel(self.live_right, "Live Games", 5)
-        self.table_box = self._make_text_panel(self.live_right, "Live Table", 5)
-        self.match_data_box = self._make_text_panel(self.live_right, "Match Data", 4)
-        self.stats_summary_box = self._make_text_panel(self.live_right, "Game Stats Summary", 4)
-        self.build_match_center_panels(self.live_right)
-        self.lineup_box = self._make_text_panel(self.live_right, "Probable Lineups", 5)
-        self.injuries_box = self._make_text_panel(self.live_right, "Injuries / Suspensions", 4)
-        self.fatigue_box = self._make_text_panel(self.live_right, "Rest / Fatigue", 4)
-        self.tactical_box = self._make_text_panel(self.live_right, "Tactical Matchup", 4)
-        self.player_form_box = self._make_text_panel(self.live_right, "Player Form", 4)
+        self.live_box = self._make_text_panel(self.live_right, "Live Games", 7)
+        self.table_box = self._make_text_panel(self.live_right, "Live Table", 7)
+        self.market_box = self._make_text_panel(self.live_right, "Ongoing Market", 6)
+        self.match_data_box = self._make_text_panel(self.live_right, "Match Data", 6)
+        self.stats_summary_box = self._make_text_panel(self.live_right, "Game Stats Summary", 6)
 
         self.build_tracking_stream_card()
-        self.build_tracking_analysis_card()
+        self.build_live_analysis_api_card()
+        self.build_live_metrics_api_card()
+        self.build_live_tactical_api_card()
+        self.build_match_intelligence_card()
 
     def build_tracking_stream_card(self):
         card = self.make_card(self.live_right, "Tracking Stream")
@@ -1605,14 +1112,14 @@ class FootballSimulator:
         )
         self.btn_tracking_refresh.pack(side="left", expand=True, fill="x", padx=(4, 0))
 
-    def build_live_analysis_api_card(self, parent_override=None):
-        parent = parent_override or self.live_right
-        card = self.make_card(parent, "Live Analysis API")
+
+    def build_live_analysis_api_card(self):
+        card = self.make_card(self.live_right, "Live Analysis API")
         card.pack(fill="both", expand=True, pady=(0, 8))
 
         self.live_analysis_status_label = tk.Label(
             card,
-            text="Live analysis API waiting...",
+            text="Analysis API waiting...",
             bg=self.card_bg,
             fg="#fbbf24",
             justify="left",
@@ -1620,153 +1127,19 @@ class FootballSimulator:
         )
         self.live_analysis_status_label.pack(fill="x", pady=(0, 8))
 
-        self.live_analysis_box = tk.Text(card, height=10, wrap="word")
+        self.live_analysis_box = tk.Text(card, height=12, wrap="word")
         self.style_text_widget(self.live_analysis_box)
         self.live_analysis_box.pack(fill="both", expand=True)
 
         bottom = tk.Frame(card, bg=self.card_bg)
         bottom.pack(fill="x", pady=(8, 0))
 
-        btn_cfg = {
-            "bg": self.accent,
-            "fg": "white",
-            "relief": "flat",
-            "activebackground": self.accent,
-            "activeforeground": "white",
-            "padx": 10,
-            "pady": 8,
-        }
+        btn_cfg = {"bg": self.accent, "fg": "white", "relief": "flat", "activebackground": self.accent, "activeforeground": "white", "padx": 10, "pady": 8}
+        tk.Button(bottom, text="Refresh Analysis", command=self.refresh_live_analysis_panel, **btn_cfg).pack(side="left", padx=(0, 6))
+        tk.Button(bottom, text="Start Worker", command=self.start_live_analysis_worker, **btn_cfg).pack(side="left", padx=6)
 
-        self.btn_live_analysis_refresh = tk.Button(
-            bottom, text="Refresh Analysis", command=self.refresh_live_analysis_panel, **btn_cfg
-        )
-        self.btn_live_analysis_refresh.pack(side="left", padx=(0, 6))
-
-        self.btn_live_analysis_start = tk.Button(
-            bottom, text="Start Worker", command=self.start_live_analysis_worker, **btn_cfg
-        )
-        self.btn_live_analysis_start.pack(side="left", padx=6)
-
-    def build_tracking_analysis_card(self):
-        card = self.make_card(self.live_right, "Tracking Analysis")
-        card.pack(fill="both", expand=True, pady=(0, 8))
-
-        self.tracking_analysis_status = tk.Label(
-            card,
-            text="Tracking analysis waiting...",
-            bg=self.card_bg,
-            fg="#fbbf24",
-            justify="left",
-            anchor="w",
-        )
-        self.tracking_analysis_status.pack(fill="x", pady=(0, 8))
-
-        self.tracking_analysis_box = tk.Text(card, height=14, wrap="word")
-        self.style_text_widget(self.tracking_analysis_box)
-        self.tracking_analysis_box.pack(fill="both", expand=True)
-
-        bottom = tk.Frame(card, bg=self.card_bg)
-        bottom.pack(fill="x", pady=(8, 0))
-
-        btn_cfg = {
-            "bg": self.accent,
-            "fg": "white",
-            "relief": "flat",
-            "activebackground": self.accent,
-            "activeforeground": "white",
-            "padx": 10,
-            "pady": 8,
-        }
-        self.btn_tracking_analysis_refresh = tk.Button(
-            bottom,
-            text="Refresh Analysis",
-            command=self.refresh_tracking_analysis_panel,
-            **btn_cfg,
-        )
-        self.btn_tracking_analysis_refresh.pack(side="left", padx=(0, 6))
-
-        self.btn_tracking_workbench = tk.Button(
-            bottom,
-            text="Open Workbench",
-            command=self.open_calibration_workbench,
-            **btn_cfg,
-        )
-        self.btn_tracking_workbench.pack(side="left", padx=6)
-
-    def refresh_tracking_analysis_panel(self):
-        self.tracking_bridge = TrackingArtifactBridge(SIMVISION_PROJECT_ROOT, self.tracking_match_id)
-        headline = self.tracking_bridge.headline()
-        tracking = self.tracking_bridge.tracking_summary()
-        pitch = self.tracking_bridge.pitch_summary()
-        calibration = self.tracking_bridge.calibration_summary()
-
-        if hasattr(self, "tracking_analysis_status"):
-            self.tracking_analysis_status.config(
-                text=(
-                    f"Readiness {headline['readiness']}/100 | "
-                    f"Tracking={headline['tracking_ready']} | "
-                    f"PitchMap={headline['pitch_ready']} | "
-                    f"Calibration={headline['calibration_ready']}"
-                )
-            )
-
-        if hasattr(self, "tracking_analysis_box"):
-            self.tracking_analysis_box.delete("1.0", "end")
-            lines = [
-                f"Match ID: {self.tracking_match_id}",
-                f"Readiness Score: {headline['readiness']}/100",
-                "",
-                f"Tracking Ready: {headline['tracking_ready']}",
-                f"Pitch Map Ready: {headline['pitch_ready']}",
-                f"Calibration Ready: {headline['calibration_ready']}",
-                f"Frames Exported: {headline['frames_exported']}",
-                "",
-                f"Tracking Processor: {tracking['processor']}",
-                f"Tracking Status: {tracking['status']}",
-                f"Frames Processed: {tracking['frames_processed']}",
-                f"Player Tracks: {tracking['player_tracks']}",
-                f"Ball Tracks: {tracking['ball_tracks']}",
-                f"Home Team Tracks: {tracking['home_team_tracks']}",
-                f"Away Team Tracks: {tracking['away_team_tracks']}",
-                f"Official Tracks: {tracking['official_tracks']}",
-                f"Goalkeeper Candidates: {tracking['goalkeeper_candidates']}",
-                "",
-                f"Pitch Map Method: {pitch['method']}",
-                f"Calibration Used: {pitch['calibration_used']}",
-                f"Mapped Points: {pitch['mapped_points']}",
-                f"Orientation Confidence: {pitch['orientation_confidence']}",
-                "",
-                f"Calibration Preview Exists: {calibration['preview_exists']}",
-                f"Calibration Frame: {calibration['frame_path']}",
-                f"Tracking Output: {self.tracking_bridge.tracking_output_path}",
-                f"Pitch Map: {self.tracking_bridge.pitch_map_path}",
-            ]
-            for line in lines:
-                self.tracking_analysis_box.insert("end", line + "\n")
-
-    def open_calibration_workbench(self):
-        workbench_path = SIMVISION_PROJECT_ROOT / "tools" / "calibration_workbench.py"
-        if not workbench_path.exists():
-            messagebox.showerror("Missing Workbench", f"Could not find:\n{workbench_path}")
-            return
-        try:
-            import subprocess
-            subprocess.Popen(
-                [
-                    "python",
-                    str(workbench_path),
-                    "--project-root", str(SIMVISION_PROJECT_ROOT),
-                    "--match-id", self.tracking_match_id,
-                    "--api-base-url", self.tracking_http_base_url,
-                ],
-                cwd=str(SIMVISION_PROJECT_ROOT),
-            )
-        except Exception as exc:
-            messagebox.showerror("Launch Error", str(exc))
-
-    def build_live_metrics_api_card(self, parent_override=None):
-        parent = parent_override or self.live_right
-        card = self.make_card(parent, "Live Player Metrics API")
+    def build_live_metrics_api_card(self):
+        card = self.make_card(self.live_right, "Live Player Metrics API")
         card.pack(fill="both", expand=True, pady=(0, 8))
 
         self.live_metrics_status_label = tk.Label(
@@ -1779,139 +1152,38 @@ class FootballSimulator:
         )
         self.live_metrics_status_label.pack(fill="x", pady=(0, 8))
 
-        self.live_metrics_box = tk.Text(card, height=10, wrap="word")
+        self.live_metrics_box = tk.Text(card, height=12, wrap="word")
         self.style_text_widget(self.live_metrics_box)
         self.live_metrics_box.pack(fill="both", expand=True)
 
         bottom = tk.Frame(card, bg=self.card_bg)
         bottom.pack(fill="x", pady=(8, 0))
 
-        btn_cfg = {
-            "bg": self.accent,
-            "fg": "white",
-            "relief": "flat",
-            "activebackground": self.accent,
-            "activeforeground": "white",
-            "padx": 10,
-            "pady": 8,
-        }
+        btn_cfg = {"bg": self.accent, "fg": "white", "relief": "flat", "activebackground": self.accent, "activeforeground": "white", "padx": 10, "pady": 8}
+        tk.Button(bottom, text="Refresh Metrics", command=self.refresh_live_metrics_panel, **btn_cfg).pack(side="left", padx=(0, 6))
 
-        self.btn_live_metrics_refresh = tk.Button(
-            bottom, text="Refresh Metrics", command=self.refresh_live_metrics_panel, **btn_cfg
-        )
-        self.btn_live_metrics_refresh.pack(side="left", padx=(0, 6))
-
-    def fetch_live_metrics_api(self, match_id: str):
-        url = f"{self.tracking_http_base_url}/live/metrics/{match_id}"
+    def open_calibration_workbench(self):
+        workbench_path = Path(r"C:\Project X\simvision_api\tools\calibration_workbench.py")
+        if not workbench_path.exists():
+            messagebox.showerror("Missing Workbench", f"Could not find:\n{workbench_path}")
+            return
         try:
-            with urllib.request.urlopen(url, timeout=TRACKING_HTTP_TIMEOUT_SECONDS) as response:
-                return json.loads(response.read().decode("utf-8"))
+            import subprocess
+            subprocess.Popen(
+                [
+                    "python",
+                    str(workbench_path),
+                    "--project-root", r"C:\Project X\simvision_api",
+                    "--match-id", self.tracking_match_id,
+                    "--api-base-url", self.tracking_http_base_url,
+                ],
+                cwd=r"C:\Project X\simvision_api",
+            )
         except Exception as exc:
-            return {"error": str(exc), "match_id": match_id}
+            messagebox.showerror("Launch Error", str(exc))
 
-    def refresh_live_metrics_api(self, force: bool = False):
-        if getattr(self, "_live_metrics_refresh_in_flight", False) and not force:
-            return
-        self._live_metrics_refresh_in_flight = True
-
-        def worker():
-            return self.fetch_live_metrics_api(self.tracking_match_id)
-
-        run_in_background(
-            worker,
-            self._apply_live_metrics_payload,
-            self._on_live_metrics_error,
-        )
-
-    def _apply_live_metrics_payload(self, data: dict):
-        self._live_metrics_refresh_in_flight = False
-        self.live_metrics_last_payload = data or {}
-        self.live_metrics_last_status = "ok" if not self.live_metrics_last_payload.get("error") else f"error: {self.live_metrics_last_payload.get('error')}"
-        self._render_live_metrics_panel()
-        self.render_match_intelligence()
-
-    def _on_live_metrics_error(self, error):
-        self._live_metrics_refresh_in_flight = False
-        self.live_metrics_last_payload = {"error": str(error)}
-        self.live_metrics_last_status = f"error: {error}"
-        self._render_live_metrics_panel()
-        self.render_match_intelligence()
-
-    def _render_live_metrics_panel(self):
-        if not hasattr(self, "live_metrics_status_label") or not hasattr(self, "live_metrics_box"):
-            return
-
-        payload = self.live_metrics_last_payload or {}
-        metrics_available = payload.get("metrics_available", False)
-        player_count = payload.get("player_count", 0)
-        tracking_ready = payload.get("tracking_ready", False)
-        pitch_ready = payload.get("pitch_map_ready", False)
-
-        self.live_metrics_status_label.config(
-            text=(
-                f"Metrics={metrics_available} | Players={player_count} | "
-                f"Tracking={tracking_ready} | PitchMap={pitch_ready}"
-            )
-        )
-
-        self.live_metrics_box.delete("1.0", "end")
-
-        if payload.get("error"):
-            self.live_metrics_box.insert("end", f"Metrics API Error:\n{payload['error']}\n")
-            return
-
-        team_summary = payload.get("team_summary", {}) or {}
-        leaders = payload.get("leaders", {}) or {}
-        alerts = payload.get("alerts", []) or []
-
-        self.live_metrics_box.insert("end", f"Match ID: {payload.get('match_id', self.tracking_match_id)}\n")
-        self.live_metrics_box.insert("end", f"Metrics Available: {metrics_available}\n")
-        self.live_metrics_box.insert("end", f"Player Count: {player_count}\n\n")
-
-        self.live_metrics_box.insert("end", "Team Summary\n")
-        if team_summary:
-            for team_name, vals in team_summary.items():
-                self.live_metrics_box.insert(
-                    "end",
-                    f"- {team_name}: distance={vals.get('distance_m', 0)} m | "
-                    f"players={vals.get('player_count', 0)} | "
-                    f"avg_speed={vals.get('avg_speed_mps', 0)} m/s\n"
-                )
-        else:
-            self.live_metrics_box.insert("end", "No team movement summary available.\n")
-
-        self.live_metrics_box.insert("end", "\nTop Distance Leaders\n")
-        for item in leaders.get("distance", [])[:5]:
-            self.live_metrics_box.insert(
-                "end",
-                f"- Track {item.get('track_id')} | team={item.get('team')} | "
-                f"distance={item.get('total_distance_m')} m | "
-                f"avg_speed={item.get('avg_speed_mps')} m/s\n"
-            )
-        if not leaders.get("distance"):
-            self.live_metrics_box.insert("end", "No distance leaders available.\n")
-
-        self.live_metrics_box.insert("end", "\nTop Speed Leaders\n")
-        for item in leaders.get("speed", [])[:5]:
-            self.live_metrics_box.insert(
-                "end",
-                f"- Track {item.get('track_id')} | team={item.get('team')} | "
-                f"max_speed={item.get('max_speed_mps')} m/s | "
-                f"distance={item.get('total_distance_m')} m\n"
-            )
-        if not leaders.get("speed"):
-            self.live_metrics_box.insert("end", "No speed leaders available.\n")
-
-        self.live_metrics_box.insert("end", "\nAlerts\n")
-        if alerts:
-            for alert in alerts:
-                self.live_metrics_box.insert("end", f"- {alert}\n")
-        else:
-            self.live_metrics_box.insert("end", "No movement alerts.\n")
-
-    def build_live_tactical_api_card(self, parent_override=None):
-        parent = parent_override or self.live_right
-        card = self.make_card(parent, "Live Tactical API")
+    def build_live_tactical_api_card(self):
+        card = self.make_card(self.live_right, "Live Tactical API")
         card.pack(fill="both", expand=True, pady=(0, 8))
 
         self.live_tactical_status_label = tk.Label(
@@ -1924,80 +1196,233 @@ class FootballSimulator:
         )
         self.live_tactical_status_label.pack(fill="x", pady=(0, 8))
 
-        self.live_tactical_box = tk.Text(card, height=10, wrap="word")
+        self.live_tactical_box = tk.Text(card, height=12, wrap="word")
         self.style_text_widget(self.live_tactical_box)
         self.live_tactical_box.pack(fill="both", expand=True)
 
         bottom = tk.Frame(card, bg=self.card_bg)
         bottom.pack(fill="x", pady=(8, 0))
 
-        btn_cfg = {
-            "bg": self.accent,
-            "fg": "white",
-            "relief": "flat",
-            "activebackground": self.accent,
-            "activeforeground": "white",
-            "padx": 10,
-            "pady": 8,
-        }
+        btn_cfg = {"bg": self.accent, "fg": "white", "relief": "flat", "activebackground": self.accent, "activeforeground": "white", "padx": 10, "pady": 8}
+        tk.Button(bottom, text="Refresh Tactical", command=self.refresh_live_tactical_panel, **btn_cfg).pack(side="left", padx=(0, 6))
+        tk.Button(bottom, text="Open Workbench", command=self.open_calibration_workbench, **btn_cfg).pack(side="left", padx=6)
 
-        self.btn_live_tactical_refresh = tk.Button(
-            bottom, text="Refresh Tactical", command=self.refresh_live_tactical_panel, **btn_cfg
+    def build_match_intelligence_card(self):
+        card = self.make_card(self.live_right, "Match Intelligence")
+        card.pack(fill="both", expand=True, pady=(0, 0))
+
+        self.match_intelligence_status_label = tk.Label(
+            card,
+            text="Match intelligence waiting...",
+            bg=self.card_bg,
+            fg="#fbbf24",
+            justify="left",
+            anchor="w",
         )
-        self.btn_live_tactical_refresh.pack(side="left", padx=(0, 6))
+        self.match_intelligence_status_label.pack(fill="x", pady=(0, 8))
 
-    def fetch_live_tactical_api(self, match_id: str):
-        url = f"{self.tracking_http_base_url}/live/tactical/{match_id}"
+        self.match_intelligence_box = tk.Text(card, height=14, wrap="word")
+        self.style_text_widget(self.match_intelligence_box)
+        self.match_intelligence_box.pack(fill="both", expand=True)
+
+        bottom = tk.Frame(card, bg=self.card_bg)
+        bottom.pack(fill="x", pady=(8, 0))
+
+        btn_cfg = {"bg": self.accent, "fg": "white", "relief": "flat", "activebackground": self.accent, "activeforeground": "white", "padx": 10, "pady": 8}
+        tk.Button(bottom, text="Refresh All", command=self.refresh_all_live_api_panels, **btn_cfg).pack(side="left", padx=(0, 6))
+
+    def _fetch_json_url(self, url):
+        with urllib.request.urlopen(url, timeout=TRACKING_HTTP_TIMEOUT_SECONDS) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    def start_live_analysis_worker(self):
+        url = f"{self.tracking_http_base_url}/live/analysis/start/{self.tracking_match_id}"
+        payload = json.dumps({"refresh_interval_seconds": 2.0, "source": "simulator"}).encode("utf-8")
+        request = urllib.request.Request(url, data=payload, method="POST")
+        request.add_header("Content-Type", "application/json")
+
+        def worker():
+            try:
+                with urllib.request.urlopen(request, timeout=TRACKING_HTTP_TIMEOUT_SECONDS) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+                self.root.after(0, lambda data=data: self._on_live_analysis_worker_started(data))
+            except Exception as exc:
+                self.root.after(0, lambda exc=exc: self.add_commentary(f"Live analysis worker start failed: {exc}"))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_live_analysis_worker_started(self, data):
+        self.add_commentary(f"Live analysis worker started for {data.get('match_id', self.tracking_match_id)}")
+        self.refresh_all_live_api_panels()
+
+    def refresh_all_live_api_panels(self):
+        self.refresh_live_analysis_panel()
+        self.refresh_live_metrics_panel()
+        self.refresh_live_tactical_panel()
+        self.refresh_match_intelligence_panel()
+
+    def fetch_live_analysis_api(self, match_id):
+        url = f"{self.tracking_http_base_url}/live/analysis/{match_id}"
         try:
-            with urllib.request.urlopen(url, timeout=TRACKING_HTTP_TIMEOUT_SECONDS) as response:
-                return json.loads(response.read().decode("utf-8"))
+            return self._fetch_json_url(url)
         except Exception as exc:
             return {"error": str(exc), "match_id": match_id}
 
-    def refresh_live_tactical_api(self, force: bool = False):
-        if getattr(self, "_live_tactical_refresh_in_flight", False) and not force:
-            return
-        self._live_tactical_refresh_in_flight = True
+    def fetch_live_metrics_api(self, match_id):
+        url = f"{self.tracking_http_base_url}/live/metrics/{match_id}"
+        try:
+            return self._fetch_json_url(url)
+        except Exception as exc:
+            return {"error": str(exc), "match_id": match_id}
 
-        def worker():
-            return self.fetch_live_tactical_api(self.tracking_match_id)
+    def fetch_live_tactical_api(self, match_id):
+        url = f"{self.tracking_http_base_url}/live/tactical/{match_id}"
+        try:
+            return self._fetch_json_url(url)
+        except Exception as exc:
+            return {"error": str(exc), "match_id": match_id}
 
-        run_in_background(
-            worker,
-            self._apply_live_tactical_payload,
-            self._on_live_tactical_error,
-        )
+    def refresh_live_analysis_panel(self):
+        match_id = self.tracking_match_id
+        run_in_background(lambda: self.fetch_live_analysis_api(match_id), self._apply_live_analysis_payload, self._on_live_analysis_error)
 
-    def _apply_live_tactical_payload(self, data: dict):
-        self._live_tactical_refresh_in_flight = False
-        self.live_tactical_last_payload = data or {}
-        self.live_tactical_last_status = "ok" if not self.live_tactical_last_payload.get("error") else f"error: {self.live_tactical_last_payload.get('error')}"
+    def refresh_live_metrics_panel(self):
+        match_id = self.tracking_match_id
+        run_in_background(lambda: self.fetch_live_metrics_api(match_id), self._apply_live_metrics_payload, self._on_live_metrics_error)
+
+    def refresh_live_tactical_panel(self):
+        match_id = self.tracking_match_id
+        run_in_background(lambda: self.fetch_live_tactical_api(match_id), self._apply_live_tactical_payload, self._on_live_tactical_error)
+
+    def refresh_match_intelligence_panel(self):
+        self._render_match_intelligence_panel()
+
+    def _apply_live_analysis_payload(self, payload):
+        self.live_analysis_payload = payload or {}
+        if self.live_analysis_payload.get("error"):
+            self.live_analysis_status = f"error: {self.live_analysis_payload.get('error')}"
+        else:
+            self.live_analysis_status = f"ready={self.live_analysis_payload.get('tracking_ready', False)} | score={self.live_analysis_payload.get('readiness_score', 0)}"
+        self._render_live_analysis_panel()
+        self._render_match_intelligence_panel()
+
+    def _on_live_analysis_error(self, error):
+        self.live_analysis_payload = {"error": str(error)}
+        self.live_analysis_status = f"error: {error}"
+        self._render_live_analysis_panel()
+        self._render_match_intelligence_panel()
+
+    def _apply_live_metrics_payload(self, payload):
+        self.live_metrics_payload = payload or {}
+        if self.live_metrics_payload.get("error"):
+            self.live_metrics_status = f"error: {self.live_metrics_payload.get('error')}"
+        else:
+            self.live_metrics_status = f"available={self.live_metrics_payload.get('metrics_available', False)} | players={self.live_metrics_payload.get('player_count', 0)}"
+        self._render_live_metrics_panel()
+        self._render_match_intelligence_panel()
+
+    def _on_live_metrics_error(self, error):
+        self.live_metrics_payload = {"error": str(error)}
+        self.live_metrics_status = f"error: {error}"
+        self._render_live_metrics_panel()
+        self._render_match_intelligence_panel()
+
+    def _apply_live_tactical_payload(self, payload):
+        self.live_tactical_payload = payload or {}
+        if self.live_tactical_payload.get("error"):
+            self.live_tactical_status = f"error: {self.live_tactical_payload.get('error')}"
+        else:
+            self.live_tactical_status = f"available={self.live_tactical_payload.get('tactical_available', False)}"
         self._render_live_tactical_panel()
-        self.render_match_intelligence()
+        self._render_match_intelligence_panel()
 
     def _on_live_tactical_error(self, error):
-        self._live_tactical_refresh_in_flight = False
-        self.live_tactical_last_payload = {"error": str(error)}
-        self.live_tactical_last_status = f"error: {error}"
+        self.live_tactical_payload = {"error": str(error)}
+        self.live_tactical_status = f"error: {error}"
         self._render_live_tactical_panel()
-        self.render_match_intelligence()
+        self._render_match_intelligence_panel()
+
+    def _render_live_analysis_panel(self):
+        if not hasattr(self, "live_analysis_status_label") or not hasattr(self, "live_analysis_box"):
+            return
+        payload = self.live_analysis_payload or {}
+        self.live_analysis_status_label.config(text=f"Analysis Status: {self.live_analysis_status}")
+        self.live_analysis_box.delete("1.0", "end")
+        if payload.get("error"):
+            self.live_analysis_box.insert("end", f"Live Analysis Error:\n{payload['error']}\n")
+            return
+
+        self.live_analysis_box.insert("end", f"Match ID: {payload.get('match_id', self.tracking_match_id)}\n")
+        self.live_analysis_box.insert("end", f"Readiness Score: {payload.get('readiness_score', 0)}/100\n")
+        self.live_analysis_box.insert("end", f"Tracking Ready: {payload.get('tracking_ready', False)}\n")
+        self.live_analysis_box.insert("end", f"Pitch Map Ready: {payload.get('pitch_map_ready', False)}\n")
+        self.live_analysis_box.insert("end", f"Calibration Ready: {payload.get('calibration_ready', False)}\n")
+        self.live_analysis_box.insert("end", f"Frames Exported: {payload.get('frames_exported', 0)}\n")
+        self.live_analysis_box.insert("end", f"Tracking Processor: {payload.get('tracking_processor', 'unknown')}\n")
+        self.live_analysis_box.insert("end", f"Tracking Status: {payload.get('tracking_status', 'unknown')}\n\n")
+        self.live_analysis_box.insert("end", "Summary\n")
+        for line in payload.get("summary_lines", [])[:12]:
+            self.live_analysis_box.insert("end", f"- {line}\n")
+        self.live_analysis_box.insert("end", "\nAlerts\n")
+        alerts = payload.get("alerts", [])
+        if alerts:
+            for alert in alerts:
+                self.live_analysis_box.insert("end", f"- {alert}\n")
+        else:
+            self.live_analysis_box.insert("end", "No analysis alerts.\n")
+
+    def _render_live_metrics_panel(self):
+        if not hasattr(self, "live_metrics_status_label") or not hasattr(self, "live_metrics_box"):
+            return
+        payload = self.live_metrics_payload or {}
+        self.live_metrics_status_label.config(text=f"Metrics Status: {self.live_metrics_status}")
+        self.live_metrics_box.delete("1.0", "end")
+        if payload.get("error"):
+            self.live_metrics_box.insert("end", f"Metrics API Error:\n{payload['error']}\n")
+            return
+
+        self.live_metrics_box.insert("end", f"Match ID: {payload.get('match_id', self.tracking_match_id)}\n")
+        self.live_metrics_box.insert("end", f"Metrics Available: {payload.get('metrics_available', False)}\n")
+        self.live_metrics_box.insert("end", f"Player Count: {payload.get('player_count', 0)}\n\n")
+
+        self.live_metrics_box.insert("end", "Team Summary\n")
+        team_summary = payload.get("team_summary", {}) or {}
+        if team_summary:
+            for team_name, vals in team_summary.items():
+                self.live_metrics_box.insert("end", f"- {team_name}: distance={vals.get('distance_m', 0)} m | players={vals.get('player_count', 0)} | avg_speed={vals.get('avg_speed_mps', 0)} m/s\n")
+        else:
+            self.live_metrics_box.insert("end", "No team movement summary available.\n")
+
+        self.live_metrics_box.insert("end", "\nTop Distance Leaders\n")
+        leaders = payload.get("leaders", {}) or {}
+        distance_leaders = leaders.get("distance", []) or []
+        if distance_leaders:
+            for item in distance_leaders[:5]:
+                self.live_metrics_box.insert("end", f"- Track {item.get('track_id')} | team={item.get('team')} | distance={item.get('total_distance_m')} m | avg_speed={item.get('avg_speed_mps')} m/s\n")
+        else:
+            self.live_metrics_box.insert("end", "No distance leaders available.\n")
+
+        self.live_metrics_box.insert("end", "\nTop Speed Leaders\n")
+        speed_leaders = leaders.get("speed", []) or []
+        if speed_leaders:
+            for item in speed_leaders[:5]:
+                self.live_metrics_box.insert("end", f"- Track {item.get('track_id')} | team={item.get('team')} | max_speed={item.get('max_speed_mps')} m/s | distance={item.get('total_distance_m')} m\n")
+        else:
+            self.live_metrics_box.insert("end", "No speed leaders available.\n")
+
+        self.live_metrics_box.insert("end", "\nAlerts\n")
+        alerts = payload.get("alerts", [])
+        if alerts:
+            for alert in alerts:
+                self.live_metrics_box.insert("end", f"- {alert}\n")
+        else:
+            self.live_metrics_box.insert("end", "No movement alerts.\n")
 
     def _render_live_tactical_panel(self):
         if not hasattr(self, "live_tactical_status_label") or not hasattr(self, "live_tactical_box"):
             return
-
-        payload = self.live_tactical_last_payload or {}
-        tactical_available = payload.get("tactical_available", False)
-        tracking_ready = payload.get("tracking_ready", False)
-        pitch_ready = payload.get("pitch_map_ready", False)
-
-        self.live_tactical_status_label.config(
-            text=(
-                f"Tactical={tactical_available} | "
-                f"Tracking={tracking_ready} | PitchMap={pitch_ready}"
-            )
-        )
-
+        payload = self.live_tactical_payload or {}
+        self.live_tactical_status_label.config(text=f"Tactical Status: {self.live_tactical_status}")
         self.live_tactical_box.delete("1.0", "end")
         if payload.get("error"):
             self.live_tactical_box.insert("end", f"Tactical API Error:\n{payload['error']}\n")
@@ -2005,11 +1430,8 @@ class FootballSimulator:
 
         home = payload.get("home", {}) or {}
         away = payload.get("away", {}) or {}
-        alerts = payload.get("alerts", []) or []
-        summary_lines = payload.get("summary_lines", []) or []
-
         self.live_tactical_box.insert("end", f"Match ID: {payload.get('match_id', self.tracking_match_id)}\n")
-        self.live_tactical_box.insert("end", f"Tactical Available: {tactical_available}\n\n")
+        self.live_tactical_box.insert("end", f"Tactical Available: {payload.get('tactical_available', False)}\n\n")
 
         self.live_tactical_box.insert("end", "Home Tactical Summary\n")
         self.live_tactical_box.insert("end", f"- Formation Hint: {home.get('formation_hint', 'unknown')}\n")
@@ -2027,163 +1449,65 @@ class FootballSimulator:
         self.live_tactical_box.insert("end", f"- Pressure: {away.get('pressure_score', 0)}\n")
         self.live_tactical_box.insert("end", f"- Fatigue Load: {away.get('fatigue_load_score', 0)}\n\n")
 
-        self.live_tactical_box.insert("end", "Summary Lines\n")
-        if summary_lines:
-            for line in summary_lines:
-                self.live_tactical_box.insert("end", f"- {line}\n")
-        else:
-            self.live_tactical_box.insert("end", "No tactical summary lines.\n")
+        self.live_tactical_box.insert("end", "Summary\n")
+        for line in payload.get("summary_lines", [])[:12]:
+            self.live_tactical_box.insert("end", f"- {line}\n")
 
         self.live_tactical_box.insert("end", "\nAlerts\n")
+        alerts = payload.get("alerts", [])
         if alerts:
             for alert in alerts:
                 self.live_tactical_box.insert("end", f"- {alert}\n")
         else:
             self.live_tactical_box.insert("end", "No tactical alerts.\n")
 
-    def build_match_intelligence_api_card(self, parent_override=None):
-        parent = parent_override or self.live_right
-        card = self.make_card(parent, "Match Intelligence")
-        card.pack(fill="both", expand=True, pady=(0, 8))
-
-        self.match_intelligence_status_label = tk.Label(
-            card,
-            text="Match Intelligence waiting...",
-            bg=self.card_bg,
-            fg="#fbbf24",
-            justify="left",
-            anchor="w",
-        )
-        self.match_intelligence_status_label.pack(fill="x", pady=(0, 8))
-
-        self.match_intelligence_meta_label = tk.Label(
-            card,
-            text="Last refresh: --:--:-- | Confidence: LOW",
-            bg=self.card_bg,
-            fg=self.muted_fg,
-            justify="left",
-            anchor="w",
-        )
-        self.match_intelligence_meta_label.pack(fill="x", pady=(0, 8))
-
-        self.match_intelligence_box = tk.Text(card, height=14, wrap="word")
-        self.style_text_widget(self.match_intelligence_box)
-        self.match_intelligence_box.pack(fill="both", expand=True)
-
-        bottom = tk.Frame(card, bg=self.card_bg)
-        bottom.pack(fill="x", pady=(8, 0))
-
-        btn_cfg = {
-            "bg": self.accent,
-            "fg": "white",
-            "relief": "flat",
-            "activebackground": self.accent,
-            "activeforeground": "white",
-            "padx": 10,
-            "pady": 8,
-        }
-        tk.Button(
-            bottom,
-            text="Refresh Intelligence",
-            command=lambda: self.refresh_all_live_api_panels(force=True),
-            **btn_cfg,
-        ).pack(side="left", padx=(0, 6))
-
-    def render_match_intelligence(self):
+    def _render_match_intelligence_panel(self):
         if not hasattr(self, "match_intelligence_status_label") or not hasattr(self, "match_intelligence_box"):
             return
 
-        analysis = getattr(self, "tracking_analysis_last_payload", {}) or {}
-        metrics = getattr(self, "live_metrics_last_payload", {}) or {}
-        tactical = getattr(self, "live_tactical_last_payload", {}) or {}
+        analysis = self.live_analysis_payload or {}
+        metrics = self.live_metrics_payload or {}
+        tactical = self.live_tactical_payload or {}
 
-        readiness = analysis.get("readiness_score", 0)
-        tracking_ready = analysis.get("tracking_ready", False)
-        pitch_ready = analysis.get("pitch_map_ready", False)
-        calibration_ready = analysis.get("calibration_ready", False)
-        metrics_available = metrics.get("metrics_available", False)
-        tactical_available = tactical.get("tactical_available", False)
+        readiness = analysis.get("readiness_score", 0) if not analysis.get("error") else 0
+        metrics_available = metrics.get("metrics_available", False) if not metrics.get("error") else False
+        tactical_available = tactical.get("tactical_available", False) if not tactical.get("error") else False
 
-        confidence = self._confidence_from_flags(
-            tracking_ready=tracking_ready,
-            pitch_ready=pitch_ready,
-            calibration_ready=calibration_ready,
-        )
-
-        if hasattr(self, "match_intelligence_status_label"):
-            self.match_intelligence_status_label.config(
-                text=(
-                    f"Readiness={readiness}/100 | "
-                    f"Tracking={tracking_ready} | PitchMap={pitch_ready} | "
-                    f"Calibration={calibration_ready} | Confidence={confidence}"
-                ),
-                fg=self._status_color(confidence),
-            )
-
-        if hasattr(self, "match_intelligence_meta_label"):
-            self.match_intelligence_meta_label.config(
-                text=f"Last refresh: {self._stamp_or_dash(getattr(self, 'last_intelligence_refresh_at', None))}"
-            )
+        self.match_intelligence_status = f"readiness={readiness} | metrics={metrics_available} | tactical={tactical_available}"
+        self.match_intelligence_status_label.config(text=f"Intelligence Status: {self.match_intelligence_status}")
 
         self.match_intelligence_box.delete("1.0", "end")
         self.match_intelligence_box.insert("end", f"Match ID: {self.tracking_match_id}\n")
         self.match_intelligence_box.insert("end", f"Readiness Score: {readiness}/100\n")
-        self.match_intelligence_box.insert("end", f"Confidence: {confidence}\n")
-        self.match_intelligence_box.insert("end", f"Movement Metrics Available: {metrics_available}\n")
+        self.match_intelligence_box.insert("end", f"Metrics Available: {metrics_available}\n")
         self.match_intelligence_box.insert("end", f"Tactical Available: {tactical_available}\n\n")
 
-        home = tactical.get("home", {}) or {}
-        away = tactical.get("away", {}) or {}
+        self.match_intelligence_box.insert("end", "Key Signals\n")
+        self.match_intelligence_box.insert("end", f"- Tracking Ready: {analysis.get('tracking_ready', False)}\n")
+        self.match_intelligence_box.insert("end", f"- Pitch Map Ready: {analysis.get('pitch_map_ready', False)}\n")
+        self.match_intelligence_box.insert("end", f"- Calibration Ready: {analysis.get('calibration_ready', False)}\n")
+        self.match_intelligence_box.insert("end", f"- Player Count: {metrics.get('player_count', 0)}\n")
+        self.match_intelligence_box.insert("end", f"- Home Formation Hint: {(tactical.get('home') or {}).get('formation_hint', 'unknown')}\n")
+        self.match_intelligence_box.insert("end", f"- Away Formation Hint: {(tactical.get('away') or {}).get('formation_hint', 'unknown')}\n\n")
 
-        self.match_intelligence_box.insert("end", "Formation Hints\n")
-        self.match_intelligence_box.insert("end", f"- Home: {home.get('formation_hint', 'unknown')}\n")
-        self.match_intelligence_box.insert("end", f"- Away: {away.get('formation_hint', 'unknown')}\n\n")
+        self.match_intelligence_box.insert("end", "Priority Alerts\n")
+        combined_alerts = []
+        combined_alerts.extend(analysis.get("alerts", []) if isinstance(analysis.get("alerts", []), list) else [])
+        combined_alerts.extend(metrics.get("alerts", []) if isinstance(metrics.get("alerts", []), list) else [])
+        combined_alerts.extend(tactical.get("alerts", []) if isinstance(tactical.get("alerts", []), list) else [])
+        deduped = []
+        for alert in combined_alerts:
+            if alert not in deduped:
+                deduped.append(alert)
 
-        alerts = []
-        alerts.extend(analysis.get("alerts", []) or [])
-        alerts.extend(metrics.get("alerts", []) or [])
-        alerts.extend(tactical.get("alerts", []) or [])
-
-        unique_alerts = []
-        seen = set()
-        for alert in alerts:
-            if alert not in seen:
-                seen.add(alert)
-                unique_alerts.append(alert)
-
-        top_alert = unique_alerts[0] if unique_alerts else "No active alerts."
-
-        if confidence == "HIGH":
-            recommendation = "System is ready for live interpretation."
-        elif confidence == "MEDIUM":
-            recommendation = "Usable, but verify calibration and pitch mapping."
-        else:
-            recommendation = "Low confidence. Refresh tracking and recalibrate if needed."
-
-        self.match_intelligence_box.insert("end", "Top Alert\n")
-        self.match_intelligence_box.insert("end", f"- {top_alert}\n\n")
-
-        self.match_intelligence_box.insert("end", "Recommendation\n")
-        self.match_intelligence_box.insert("end", f"- {recommendation}\n\n")
-
-        self.match_intelligence_box.insert("end", "Combined Alerts\n")
-        if unique_alerts:
-            for alert in unique_alerts:
+        if deduped:
+            for alert in deduped[:12]:
                 self.match_intelligence_box.insert("end", f"- {alert}\n")
         else:
-            self.match_intelligence_box.insert("end", "No active intelligence alerts.\n")
-
-        self.last_intelligence_refresh_at = self._now_clock_text()
-
-    def refresh_all_live_api_panels(self, force: bool = False):
-        self.refresh_tracking_http_status(silent=True, force=force)
-        self.refresh_tracking_analysis_panel()
-        self.refresh_live_metrics_api(force=force)
-        self.refresh_live_tactical_api(force=force)
-        self.render_match_intelligence()
+            self.match_intelligence_box.insert("end", "No combined alerts.\n")
 
     def build_post_match_page(self):
-        page = self.page_bodies["post_match"]
+        page = self.pages["post_match"]
 
         title = tk.Label(page, text="Post Match Report", bg=self.theme_bg, fg=self.text_fg, font=(self.font_family, 18, "bold"))
         title.pack(anchor="w", padx=10, pady=(10, 6))
@@ -2234,7 +1558,7 @@ class FootballSimulator:
         self.post_table_box = self._make_text_panel(right, "League Table", 8)
 
     def build_team_overview_page(self):
-        page = self.page_bodies["team_overview"]
+        page = self.pages["team_overview"]
 
         header = tk.Label(page, text="Team Overview", bg=self.theme_bg, fg=self.text_fg, font=(self.font_family, 18, "bold"))
         header.pack(anchor="w", padx=10, pady=(10, 6))
@@ -2286,7 +1610,7 @@ class FootballSimulator:
         self.club_transfer_box = self._make_text_panel(right, "Transfer History", 8)
 
     def build_player_stats_page(self):
-        page = self.page_bodies["player_stats"]
+        page = self.pages["player_stats"]
 
         header = tk.Label(page, text="Player / Staff Stats", bg=self.theme_bg, fg=self.text_fg, font=(self.font_family, 18, "bold"))
         header.pack(anchor="w", padx=10, pady=(10, 6))
@@ -2334,7 +1658,7 @@ class FootballSimulator:
         self.player_career_box = self._make_text_panel(right, "Career Stats", 8)
 
     def build_settings_home_page(self):
-        page = self.page_bodies["settings_home"]
+        page = self.pages["settings_home"]
 
         title = tk.Label(page, text="Settings", bg=self.theme_bg, fg=self.text_fg, font=(self.font_family, 18, "bold"))
         title.pack(anchor="w", padx=10, pady=(10, 6))
@@ -2387,7 +1711,7 @@ class FootballSimulator:
         self.btn_toggle_mute.pack(fill="x", pady=4)
 
     def build_personalization_page(self):
-        page = self.page_bodies["personalization"]
+        page = self.pages["personalization"]
 
         title = tk.Label(
             page,
@@ -2560,7 +1884,7 @@ class FootballSimulator:
     def _tracking_status_loop(self):
         self.tracking_status_loop_id = None
         self.refresh_tracking_http_status(silent=True)
-        self.refresh_tracking_analysis_panel()
+        self.refresh_all_live_api_panels()
         self.schedule_tracking_status_loop()
 
     def start_tracking_subscription(self):
@@ -2599,7 +1923,7 @@ class FootballSimulator:
         lowered = status.lower()
         if "connected" in lowered and "connecting" not in lowered:
             self.root.after(250, lambda: self.refresh_tracking_http_status(silent=True, force=True))
-            self.root.after(350, self.refresh_tracking_analysis_panel)
+            self.root.after(400, self.refresh_all_live_api_panels)
 
     def _handle_tracking_message(self, payload):
         self.tracking_last_payload = payload or {}
@@ -2617,7 +1941,7 @@ class FootballSimulator:
             "tracked",
         }:
             self.root.after(0, lambda: self.refresh_tracking_http_status(silent=True, force=True))
-            self.root.after(100, self.refresh_tracking_analysis_panel)
+            self.root.after(150, self.refresh_all_live_api_panels)
 
     def refresh_tracking_http_status(self, silent=False, force=False):
         now = time.time()
@@ -2667,14 +1991,14 @@ class FootballSimulator:
             f"subs={data.get('subscriber_count', 0)}"
         )
         self._render_tracking_state()
-        self.refresh_tracking_analysis_panel()
+        self.refresh_all_live_api_panels()
         if not silent:
             self.add_commentary(f"Tracking status refreshed: {self.tracking_last_http_status}")
 
     def _apply_tracking_http_error(self, error_text, silent):
         self.tracking_last_http_status = f"error: {error_text}"
         self._render_tracking_state()
-        self.refresh_tracking_analysis_panel()
+        self.refresh_all_live_api_panels()
         if not silent:
             self.add_commentary(f"Tracking status refresh failed: {error_text}")
 
@@ -2724,8 +2048,8 @@ class FootballSimulator:
 
         self.load_initial_data()
         self.refresh_tracking_http_status(silent=True, force=True)
-        self.refresh_tracking_analysis_panel()
-        self.refresh_tracking_analysis_panel()
+        self.refresh_all_live_api_panels()
+        self.refresh_all_live_api_panels()
         self.start_tracking_subscription()
 
     def _on_backend_error(self, error):
@@ -2735,7 +2059,6 @@ class FootballSimulator:
         self.last_data_source = "cache"
         self.load_initial_data()
         self.refresh_tracking_http_status(silent=True, force=True)
-        self.refresh_tracking_analysis_panel()
 
     def load_initial_data(self):
         run_in_background(self._fetch_all_data, self._on_data_loaded, self._on_data_error)
@@ -2797,7 +2120,7 @@ class FootballSimulator:
         self.reload_selectors()
         self.refresh_all_display()
         self.populate_demo_pages()
-        self.refresh_tracking_analysis_panel()
+        self.refresh_all_live_api_panels()
         self.add_commentary(f"Loaded {len(self.team_list)} teams for {self.current_competition}.")
 
     def _on_data_error(self, error):
@@ -2840,7 +2163,6 @@ class FootballSimulator:
         self.refresh_match_detail()
         self.refresh_compare_card()
         self.reload_live_panels()
-        self.refresh_match_intelligence_panels()
 
     def refresh_match_detail(self):
         home = self.home_box.get().strip() or "Home"
@@ -2871,97 +2193,53 @@ class FootballSimulator:
         self._render_form_bar(self.goals_bar, self._safe_ratio(hgf, agf), 100 - self._safe_ratio(hgf, agf))
 
     def reload_live_panels(self):
-        for box_name in ["live_box", "table_box", "market_box", "match_data_box", "stats_summary_box"]:
-            box = getattr(self, box_name, None)
-            if box is not None:
-                box.delete("1.0", "end")
+        for box in [self.live_box, self.table_box, self.market_box, self.match_data_box, self.stats_summary_box]:
+            box.delete("1.0", "end")
 
         live_matches = self.live_games.get("live_matches", []) if isinstance(self.live_games, dict) else []
         scheduled = self.live_games.get("scheduled_with_odds", []) if isinstance(self.live_games, dict) else []
 
-        if hasattr(self, "live_box"):
-            if live_matches:
-                for row in live_matches[:12]:
-                    self.live_box.insert(
-                        "end",
-                        f"{row.get('home','')} {row.get('score_home','?')}-{row.get('score_away','?')} {row.get('away','')} {row.get('minute','')}\n",
-                    )
-            elif scheduled:
-                for row in scheduled[:12]:
-                    self.live_box.insert(
-                        "end",
-                        f"{row.get('home','')} vs {row.get('away','')} {row.get('status','')} {row.get('start_time','')}\n",
-                    )
-            else:
-                self.live_box.insert("end", "No live games loaded yet.\n")
-
-        if hasattr(self, "table_box"):
-            if self.standings:
-                for row in self.standings[:20]:
-                    self.table_box.insert("end", f"{row.get('team','')}  Pts:{row.get('points',0)}\n")
-            else:
-                self.table_box.insert("end", "No standings loaded.\n")
-
-        if hasattr(self, "market_box"):
-            if isinstance(self.bet365_prematch, dict) and self.bet365_prematch:
-                summary = self.bet365_prematch.get("summary", {}) or {}
-                self.market_box.insert("end", "Prematch market\n")
-                self.market_box.insert("end", f"Events: {summary.get('event_count', 0)}\n")
-                self.market_box.insert("end", f"Source: {self.bet365_prematch.get('source', 'unknown')}\n")
-            else:
-                self.market_box.insert("end", "No market summary loaded.\n")
-
-        if hasattr(self, "match_data_box"):
-            self.match_data_box.insert(
-                "end",
-                f"League: {self.current_competition}\n"
-                f"Teams loaded: {len(self.team_list)}\n"
-                f"Fixtures loaded: {len(self.fixtures)}\n"
-                f"News loaded: {len(self.news_items)}\n"
-                f"Source: {self.last_data_source}\n",
-            )
-
-        if hasattr(self, "stats_summary_box"):
-            self.stats_summary_box.insert("end", f"Prediction: {self.prediction_label.cget('text')}\n")
-            self.stats_summary_box.insert("end", f"Odds: {self.prediction_engine.build_odds_caption(self.selected_fixture_odds)}\n")
-
-        self._render_selected_odds()
-        self.refresh_match_center_panels()
-
-    def build_scoreline_tendency(self, home: str, away: str) -> str:
-        if isinstance(self.team_advanced_form, dict):
-            home_adv = self.team_advanced_form.get("home", {}) or {}
-            away_adv = self.team_advanced_form.get("away", {}) or {}
+        if live_matches:
+            for m in live_matches[:12]:
+                self.live_box.insert(
+                    "end",
+                    f"{m.get('home','')} {m.get('score_home','?')}-{m.get('score_away','?')} {m.get('away','')} {m.get('minute','')}\n",
+                )
+        elif scheduled:
+            for m in scheduled[:12]:
+                self.live_box.insert(
+                    "end",
+                    f"{m.get('home','')} vs {m.get('away','')} {m.get('status','')} {m.get('start_time','')}\n",
+                )
         else:
-            home_adv = {}
-            away_adv = {}
+            self.live_box.insert("end", "No live games loaded yet.\n")
 
-        try:
-            home_xg = float(home_adv.get("xg_for_5", home_adv.get("xg_for", 1.2)) or 1.2)
-        except Exception:
-            home_xg = 1.2
+        if self.standings:
+            for row in self.standings[:20]:
+                self.table_box.insert("end", f"{row.get('team','')}  Pts:{row.get('points',0)}\n")
+        else:
+            self.table_box.insert("end", "No standings loaded.\n")
 
-        try:
-            away_xg = float(away_adv.get("xg_for_5", away_adv.get("xg_for", 1.0)) or 1.0)
-        except Exception:
-            away_xg = 1.0
+        if isinstance(self.bet365_prematch, dict) and self.bet365_prematch:
+            summary = self.bet365_prematch.get("summary", {}) or {}
+            self.market_box.insert("end", "Prematch market\n")
+            self.market_box.insert("end", f"Events: {summary.get('event_count', 0)}\n")
+            self.market_box.insert("end", f"Source: {self.bet365_prematch.get('source', 'unknown')}\n")
+        else:
+            self.market_box.insert("end", "No market summary loaded.\n")
 
-        home_goals = max(round(home_xg), getattr(self, "home_score", 0))
-        away_goals = max(round(away_xg), getattr(self, "away_score", 0))
+        self.match_data_box.insert(
+            "end",
+            f"League: {self.current_competition}\n"
+            f"Teams loaded: {len(self.team_list)}\n"
+            f"Fixtures loaded: {len(self.fixtures)}\n"
+            f"News loaded: {len(self.news_items)}\n"
+            f"Source: {self.last_data_source}\n",
+        )
 
-        return f"Scoreline tendency: {home} {home_goals} - {away_goals} {away}"
-
-    def build_post_match_summary(self, final_line: str = "") -> str:
-        lines = []
-        if final_line:
-            lines += [final_line, ""]
-        lines += [
-            getattr(self, "prediction_last_verdict", "Likely winner: waiting"),
-            getattr(self, "prediction_last_scoreline", "Scoreline tendency: waiting"),
-            "",
-            getattr(self, "prediction_last_block", "No prediction summary captured."),
-        ]
-        return "\n".join(lines)
+        self.stats_summary_box.insert("end", f"Prediction: {self.prediction_label.cget('text')}\n")
+        self.stats_summary_box.insert("end", f"Odds: {self.prediction_engine.build_odds_caption(self.selected_fixture_odds)}\n")
+        self._render_selected_odds()
 
     def populate_demo_pages(self):
         for box in [
@@ -3047,7 +2325,6 @@ class FootballSimulator:
                 "home_form": self.data_client.load_team_form(home, self.current_competition),
                 "away_form": self.data_client.load_team_form(away, self.current_competition),
                 "selected_fixture_odds": self.data_client.load_selected_fixture_odds(home, away),
-                "match_intelligence": self.data_client.load_match_intelligence(home, away, self.current_competition),
             },
             lambda result: self._apply_pre_match_data(home, away, result),
             self._on_data_error,
@@ -3061,21 +2338,9 @@ class FootballSimulator:
             self.show_page("live_match")
 
     def _apply_pre_match_data(self, home, away, result):
-        result = result or {}
-
-        self.home_form_data = result.get("home_form", {}) or {}
-        self.away_form_data = result.get("away_form", {}) or {}
-        self.selected_fixture_odds = result.get("selected_fixture_odds", {}) or {}
-
-        intelligence = result.get("match_intelligence", {}) or {}
-        self.team_advanced_form = intelligence.get("team_advanced_form", {}) or {}
-        self.probable_lineups = intelligence.get("probable_lineups", {}) or {}
-        self.injury_report = intelligence.get("injury_report", {}) or {}
-        self.rest_profile = intelligence.get("rest_profile", {}) or {}
-        self.odds_movement = intelligence.get("odds_movement", {}) or {}
-        self.live_match_events = intelligence.get("live_match_events", {}) or {}
-        self.player_form = intelligence.get("player_form", {}) or {}
-        self.tactical_matchup = intelligence.get("tactical_matchup", {}) or {}
+        self.home_form_data = result.get("home_form", {}) if result else {}
+        self.away_form_data = result.get("away_form", {}) if result else {}
+        self.selected_fixture_odds = result.get("selected_fixture_odds", {}) if result else {}
 
         prediction_text = self.prediction_engine.build_prediction(
             home=home,
@@ -3086,39 +2351,7 @@ class FootballSimulator:
             prematch_summary=self.bet365_prematch,
             tournament_odds=self.tournament_odds,
             fixture_odds=self.selected_fixture_odds,
-            team_advanced_form=self.team_advanced_form,
-            probable_lineups=self.probable_lineups,
-            injury_report=self.injury_report,
-            rest_profile=self.rest_profile,
-            odds_movement=self.odds_movement,
-            live_match_events=self.live_match_events,
-            player_form=self.player_form,
-            tactical_matchup=self.tactical_matchup,
         )
-
-        prediction_block = self.prediction_engine.build_prediction_block(
-            home=home,
-            away=away,
-            home_form=self.home_form_data,
-            away_form=self.away_form_data,
-            live_games=self.live_games,
-            prematch_summary=self.bet365_prematch,
-            tournament_odds=self.tournament_odds,
-            fixture_odds=self.selected_fixture_odds,
-            team_advanced_form=self.team_advanced_form,
-            probable_lineups=self.probable_lineups,
-            injury_report=self.injury_report,
-            rest_profile=self.rest_profile,
-            odds_movement=self.odds_movement,
-            live_match_events=self.live_match_events,
-            player_form=self.player_form,
-            tactical_matchup=self.tactical_matchup,
-        )
-
-        self.prediction_last_block = prediction_block
-        self.prediction_last_verdict = self.extract_prediction_verdict(prediction_text)
-        self.prediction_last_scoreline = self.build_scoreline_tendency(home, away)
-        self.post_match_summary_text = self.build_post_match_summary()
 
         self.prediction_label.config(text=prediction_text)
         self.form_label.config(
@@ -3128,23 +2361,9 @@ class FootballSimulator:
                 f"{away}: {' '.join(self.away_form_data.get('form_last5', [])) or 'n/a'}"
             )
         )
-        self.add_commentary(self.prediction_last_block)
+
+        self.add_commentary(prediction_text)
         self.refresh_all_display()
-
-    def extract_prediction_verdict(self, prediction_text: str) -> str:
-        if not prediction_text:
-            return "Likely winner: waiting"
-
-        parts = [p.strip() for p in prediction_text.split("|") if p.strip()]
-        for part in parts:
-            if (
-                part.startswith("Likely winner:")
-                or part.startswith("Edge:")
-                or part.startswith("Draw is live")
-            ):
-                return part
-
-        return "Likely winner: waiting"
 
     def pause_match(self):
         self.engine.running = False
@@ -3328,7 +2547,7 @@ class FootballSimulator:
     # ------------------------------------------------
 
     def on_league_changed(self, _event=None):
-        selected = self.league_box.get().strip()
+        selected = self.league_box.get()
         self.current_competition = LEAGUE_OPTIONS.get(selected, "PL")
 
         self.team_list = []
@@ -3337,27 +2556,16 @@ class FootballSimulator:
         self.standings = []
         self.news_items = []
         self.live_games = {}
-        self.odds_markets = {}
         self.bet365_prematch = {}
         self.tournament_odds = {}
         self.selected_fixture_odds = {}
         self.home_form_data = {}
         self.away_form_data = {}
 
-        self.team_advanced_form = {}
-        self.probable_lineups = {}
-        self.injury_report = {}
-        self.rest_profile = {}
-        self.odds_movement = {}
-        self.live_match_events = {}
-        self.player_form = {}
-        self.tactical_matchup = {}
-
         self.home_box.set("")
         self.away_box.set("")
         self.home_box["values"] = []
         self.away_box["values"] = []
-
         self.home_name_label.config(text="HOME")
         self.away_name_label.config(text="AWAY")
         self.prediction_label.config(text="Prediction: waiting")
@@ -3387,52 +2595,26 @@ class FootballSimulator:
         self.selected_fixture_odds = data.get("selected_fixture_odds", {}) or {}
         self.home_form_data = data.get("home_form", {}) or {}
         self.away_form_data = data.get("away_form", {}) or {}
-
-        intel = data.get("match_intelligence", {}) or {}
-        self.team_advanced_form = intel.get("team_advanced_form", {}) or {}
-        self.probable_lineups = intel.get("probable_lineups", {}) or {}
-        self.injury_report = intel.get("injury_report", {}) or {}
-        self.rest_profile = intel.get("rest_profile", {}) or {}
-        self.odds_movement = intel.get("odds_movement", {}) or {}
-        self.live_match_events = intel.get("live_match_events", {}) or {}
-        self.player_form = intel.get("player_form", {}) or {}
-        self.tactical_matchup = intel.get("tactical_matchup", {}) or {}
-
         self.refresh_all_display()
+        self.refresh_all_live_api_panels()
 
         home = self.home_box.get().strip()
         away = self.away_box.get().strip()
         if home and away and home != away:
-            build_kwargs = {
-                "home": home,
-                "away": away,
-                "home_form": self.home_form_data,
-                "away_form": self.away_form_data,
-                "live_games": self.live_games,
-                "prematch_summary": self.bet365_prematch,
-                "tournament_odds": self.tournament_odds,
-                "fixture_odds": self.selected_fixture_odds,
-                "team_advanced_form": self.team_advanced_form,
-                "probable_lineups": self.probable_lineups,
-                "injury_report": self.injury_report,
-                "rest_profile": self.rest_profile,
-                "odds_movement": self.odds_movement,
-                "live_match_events": self.live_match_events,
-                "player_form": self.player_form,
-                "tactical_matchup": self.tactical_matchup,
-            }
-            prediction_text = self.prediction_engine.build_prediction(**build_kwargs)
-            self.prediction_label.config(text=prediction_text)
-            self.prediction_last_verdict = self.extract_prediction_verdict(prediction_text)
-            self.prediction_last_scoreline = self.build_scoreline_tendency(home, away)
-            if hasattr(self.prediction_engine, "build_prediction_block"):
-                try:
-                    self.prediction_last_block = self.prediction_engine.build_prediction_block(**build_kwargs)
-                except Exception:
-                    self.prediction_last_block = prediction_text
-            else:
-                self.prediction_last_block = prediction_text
-            self.refresh_match_intelligence_panels()
+            try:
+                prediction_text = self.prediction_engine.build_prediction(
+                    home=home,
+                    away=away,
+                    home_form=self.home_form_data,
+                    away_form=self.away_form_data,
+                    live_games=self.live_games,
+                    prematch_summary=self.bet365_prematch,
+                    tournament_odds=self.tournament_odds,
+                    fixture_odds=self.selected_fixture_odds,
+                )
+                self.prediction_label.config(text=prediction_text)
+            except Exception as exc:
+                logger.warning("Prediction update warning: %s", exc)
 
     def _league_name_from_code(self, code):
         for name, value in LEAGUE_OPTIONS.items():
