@@ -524,3 +524,73 @@ Traceback (most recent call last):
     self.prediction_last_verdict = self.extract_prediction_verdict(prediction_text)
                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 AttributeError: 'FootballSimulator' object has no attribute 'extract_prediction_verdict'
+2026-03-20 03:18:29,110 | ERROR | simulator_app | Backend startup error: 'FootballSimulator' object has no attribute 'tracking_analysis_meta_label'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2695, in _on_backend_ready
+    self.refresh_tracking_analysis_panel()
+  File "C:\Project X\codex-environment-main\src\app.py", line 1709, in refresh_tracking_analysis_panel
+    self.tracking_analysis_meta_label.config(
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'tracking_analysis_meta_label'
+2026-03-20 03:18:29,890 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute 'tracking_analysis_meta_label'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2768, in _on_data_loaded
+    self.refresh_tracking_analysis_panel()
+  File "C:\Project X\codex-environment-main\src\app.py", line 1709, in refresh_tracking_analysis_panel
+    self.tracking_analysis_meta_label.config(
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'tracking_analysis_meta_label'
+2026-03-20 03:18:34,219 | ERROR | simulator_app | Data load error: 'FootballSimulator' object has no attribute 'tracking_analysis_meta_label'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2768, in _on_data_loaded
+    self.refresh_tracking_analysis_panel()
+  File "C:\Project X\codex-environment-main\src\app.py", line 1709, in refresh_tracking_analysis_panel
+    self.tracking_analysis_meta_label.config(
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'tracking_analysis_meta_label'
+2026-03-20 03:19:33,795 | ERROR | simulator_app | Backend startup error: 'FootballSimulator' object has no attribute 'tracking_analysis_meta_label'
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2695, in _on_backend_ready
+    self.refresh_tracking_analysis_panel()
+  File "C:\Project X\codex-environment-main\src\app.py", line 1709, in refresh_tracking_analysis_panel
+    self.tracking_analysis_meta_label.config(
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FootballSimulator' object has no attribute 'tracking_analysis_meta_label'
+2026-03-20 03:23:20,421 | ERROR | simulator_app | Backend startup error: name 'tracking_ready' is not defined
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2722, in _on_backend_ready
+    self.refresh_tracking_analysis_panel()
+  File "C:\Project X\codex-environment-main\src\app.py", line 1737, in refresh_tracking_analysis_panel
+    f"Confidence: {self._confidence_from_flags(tracking_ready, pitch_ready, calibration_ready)}"
+                                               ^^^^^^^^^^^^^^
+NameError: name 'tracking_ready' is not defined
+2026-03-20 03:23:25,108 | ERROR | simulator_app | Data load error: name 'tracking_ready' is not defined
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2795, in _on_data_loaded
+    self.refresh_tracking_analysis_panel()
+  File "C:\Project X\codex-environment-main\src\app.py", line 1737, in refresh_tracking_analysis_panel
+    f"Confidence: {self._confidence_from_flags(tracking_ready, pitch_ready, calibration_ready)}"
+                                               ^^^^^^^^^^^^^^
+NameError: name 'tracking_ready' is not defined
+2026-03-20 03:23:25,134 | ERROR | simulator_app | Data load error: name 'tracking_ready' is not defined
+Traceback (most recent call last):
+  File "C:\Project X\codex-environment-main\src\sim_integration\tk_helpers.py", line 20, in _worker
+    on_done(result)
+  File "C:\Project X\codex-environment-main\src\app.py", line 2795, in _on_data_loaded
+    self.refresh_tracking_analysis_panel()
+  File "C:\Project X\codex-environment-main\src\app.py", line 1737, in refresh_tracking_analysis_panel
+    f"Confidence: {self._confidence_from_flags(tracking_ready, pitch_ready, calibration_ready)}"
+                                               ^^^^^^^^^^^^^^
+NameError: name 'tracking_ready' is not defined
