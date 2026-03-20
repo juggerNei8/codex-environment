@@ -379,6 +379,12 @@ class FootballSimulator:
         self.last_data_source = "unknown"
         self.current_page = "live_match"
 
+        self.last_analysis_refresh_at = None
+        self.last_metrics_refresh_at = None
+        self.last_tactical_refresh_at = None
+        self.last_intelligence_refresh_at = None
+        self.snapshot_export_dir = Path(__file__).resolve().parent / "exports"
+
         self.font_family = "Arial"
         self.header_font_size = 16
         self.body_font_size = 10
@@ -482,7 +488,6 @@ class FootballSimulator:
         self.root.protocol("WM_DELETE_WINDOW", self.quit_app)
 
     def _now_clock_text(self):
-        import time
         return time.strftime("%H:%M:%S")
 
     def _stamp_or_dash(self, value):
@@ -492,11 +497,10 @@ class FootballSimulator:
         if not stamp_text or stamp_text == "--:--:--":
             return "NO DATA"
         try:
-            import time
-            now_struct = time.localtime()
             h, m, s = [int(x) for x in stamp_text.split(":")]
-            stamp_secs = h * 3600 + m * 60 + s
+            now_struct = time.localtime()
             now_secs = now_struct.tm_hour * 3600 + now_struct.tm_min * 60 + now_struct.tm_sec
+            stamp_secs = h * 3600 + m * 60 + s
             age = max(0, now_secs - stamp_secs)
             if age <= 10:
                 return "FRESH"
@@ -515,13 +519,48 @@ class FootballSimulator:
 
     def _status_color(self, status_text: str):
         lowered = (status_text or "").lower()
-        if "high" in lowered or "fresh" in lowered or "ok" in lowered or "ready" in lowered or "connected" in lowered:
+        if any(word in lowered for word in ("high", "fresh", "ok", "ready", "connected")):
             return "#22c55e"
-        if "medium" in lowered or "aging" in lowered or "refreshing" in lowered:
+        if any(word in lowered for word in ("medium", "aging", "refreshing", "partial")):
             return "#facc15"
-        if "low" in lowered or "stale" in lowered or "error" in lowered or "failed" in lowered:
+        if any(word in lowered for word in ("low", "stale", "error", "failed", "missing")):
             return "#f97316"
         return self.text_fg
+
+    def export_live_dashboard_snapshot(self):
+        try:
+            self.snapshot_export_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            file_path = self.snapshot_export_dir / f"live_dashboard_snapshot_{self.tracking_match_id}_{timestamp}.json"
+
+            analysis_payload = getattr(self, "tracking_analysis_last_payload", {}) or {}
+            metrics_payload = getattr(self, "live_metrics_last_payload", {}) or {}
+            tactical_payload = getattr(self, "live_tactical_last_payload", {}) or {}
+
+            snapshot = {
+                "exported_at": self._now_clock_text(),
+                "match_id": self.tracking_match_id,
+                "tracking_http_status": self.tracking_last_http_status,
+                "tracking_socket_status": self.tracking_last_status,
+                "analysis": analysis_payload,
+                "metrics": metrics_payload,
+                "tactical": tactical_payload,
+                "match_intelligence": {
+                    "last_refresh": self.last_intelligence_refresh_at,
+                    "readiness_score": analysis_payload.get("readiness_score", 0),
+                    "tracking_ready": analysis_payload.get("tracking_ready", False),
+                    "pitch_map_ready": analysis_payload.get("pitch_map_ready", False),
+                    "calibration_ready": analysis_payload.get("calibration_ready", False),
+                    "metrics_available": metrics_payload.get("metrics_available", False),
+                    "tactical_available": tactical_payload.get("tactical_available", False),
+                },
+            }
+
+            file_path.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
+            self.add_commentary(f"Snapshot exported: {file_path}")
+            messagebox.showinfo("Export Snapshot", f"Saved snapshot to:\n{file_path}")
+        except Exception as exc:
+            messagebox.showerror("Export Snapshot", str(exc))
 
     def build_match_center_panels(self, parent):
         self.match_center_container = self.make_card(parent, "Match Center")
@@ -1663,6 +1702,16 @@ class FootballSimulator:
         )
         self.tracking_analysis_status.pack(fill="x", pady=(0, 8))
 
+        self.tracking_analysis_meta_label = tk.Label(
+            card,
+            text="Last refresh: --:--:-- | Freshness: NO DATA | Confidence: LOW",
+            bg=self.card_bg,
+            fg=self.muted_fg,
+            justify="left",
+            anchor="w",
+        )
+        self.tracking_analysis_meta_label.pack(fill="x", pady=(0, 8))
+
         self.tracking_analysis_box = tk.Text(card, height=14, wrap="word")
         self.style_text_widget(self.tracking_analysis_box)
         self.tracking_analysis_box.pack(fill="both", expand=True)
@@ -1703,9 +1752,37 @@ class FootballSimulator:
         calibration = self.tracking_bridge.calibration_summary()
 
         if hasattr(self, "tracking_analysis_status"):
-            self.tracking_analysis_status.config(text="Tracking analysis refreshing...", fg=self._status_color("refreshing"))
-
+            self.tracking_analysis_status.config(
+                text="Tracking analysis refreshing...",
+                fg=self._status_color("refreshing"),
+            )
         self.last_analysis_refresh_at = self._now_clock_text()
+
+        confidence = self._confidence_from_flags(
+            headline["tracking_ready"],
+            headline["pitch_ready"],
+            headline["calibration_ready"],
+        )
+
+        if hasattr(self, "tracking_analysis_status"):
+            self.tracking_analysis_status.config(
+                text=(
+                    f"Readiness {headline['readiness']}/100 | "
+                    f"Tracking={headline['tracking_ready']} | "
+                    f"PitchMap={headline['pitch_ready']} | "
+                    f"Calibration={headline['calibration_ready']}"
+                ),
+                fg=self._status_color(confidence),
+            )
+
+        if hasattr(self, "tracking_analysis_meta_label"):
+            self.tracking_analysis_meta_label.config(
+                text=(
+                    f"Last refresh: {self._stamp_or_dash(self.last_analysis_refresh_at)} | "
+                    f"Freshness: {self._freshness_label(self.last_analysis_refresh_at)} | "
+                    f"Confidence: {confidence}"
+                )
+            )
         analysis_payload = getattr(self, "tracking_analysis_last_payload", {}) or {}
         tracking_ready = analysis_payload.get("tracking_ready", False)
         pitch_ready = analysis_payload.get("pitch_map_ready", False)
@@ -1728,6 +1805,30 @@ class FootballSimulator:
                     f"Calibration={headline['calibration_ready']}"
                 )
             )
+
+        self.tracking_analysis_last_payload = {
+            "match_id": self.tracking_match_id,
+            "readiness_score": headline["readiness"],
+            "tracking_ready": headline["tracking_ready"],
+            "pitch_map_ready": headline["pitch_ready"],
+            "calibration_ready": headline["calibration_ready"],
+            "frames_exported": headline["frames_exported"],
+            "tracking": tracking,
+            "pitch": pitch,
+            "calibration": calibration,
+            "alerts": [],
+        }
+
+        if not headline["tracking_ready"]:
+            self.tracking_analysis_last_payload["alerts"].append("Tracking output missing.")
+        if not headline["pitch_ready"]:
+            self.tracking_analysis_last_payload["alerts"].append("Pitch mapping missing.")
+        if not headline["calibration_ready"]:
+            self.tracking_analysis_last_payload["alerts"].append("Calibration points missing.")
+
+        top_alert = self.tracking_analysis_last_payload["alerts"][0] if self.tracking_analysis_last_payload["alerts"] else "System looks ready."
+
+        self.last_analysis_refresh_at = self._now_clock_text()
 
         if hasattr(self, "tracking_analysis_box"):
             self.tracking_analysis_box.delete("1.0", "end")
@@ -1824,7 +1925,6 @@ class FootballSimulator:
             "padx": 10,
             "pady": 8,
         }
-
         self.btn_live_metrics_refresh = tk.Button(
             bottom, text="Refresh Metrics", command=self.refresh_live_metrics_panel, **btn_cfg
         )
@@ -1842,7 +1942,12 @@ class FootballSimulator:
         if getattr(self, "_live_metrics_refresh_in_flight", False) and not force:
             return
         self._live_metrics_refresh_in_flight = True
-
+       
+        if hasattr(self, "live_metrics_status_label"):
+            self.live_metrics_status_label.config(
+                text="Metrics API refreshing...",
+                fg=self._status_color("refreshing"),
+            )
         if hasattr(self, "live_metrics_status_label"):
             self.live_metrics_status_label.config(text="Metrics API refreshing...", fg=self._status_color("refreshing"))
 
@@ -1855,13 +1960,17 @@ class FootballSimulator:
             self._on_live_metrics_error,
         )
 
-    def _apply_live_metrics_payload(self, data: dict):
-        self._live_metrics_refresh_in_flight = False
-        self.live_metrics_last_payload = data or {}
-        self.live_metrics_last_status = "ok" if not self.live_metrics_last_payload.get("error") else f"error: {self.live_metrics_last_payload.get('error')}"
+    def _apply_live_metrics_payload(self, payload):
+        self.live_metrics_last_payload = payload or {}
+        if self.live_metrics_last_payload.get("error"):
+            self.live_metrics_last_status = f"error: {self.live_metrics_last_payload.get('error')}"
+        else:
+            available = self.live_metrics_last_payload.get("metrics_available", False)
+            self.live_metrics_last_status = f"available={available}"
         self.last_metrics_refresh_at = self._now_clock_text()
         self._render_live_metrics_panel()
         self.render_match_intelligence()
+
 
     def _on_live_metrics_error(self, error):
         self._live_metrics_refresh_in_flight = False
@@ -1880,8 +1989,9 @@ class FootballSimulator:
         tracking_ready = payload.get("tracking_ready", False)
         pitch_ready = payload.get("pitch_map_ready", False)
         confidence = self._confidence_from_flags(tracking_ready, pitch_ready, False)
+        confidence = self._confidence_from_flags(tracking_ready, pitch_ready, False)
 
-        status_text = f"Metrics={'OK' if metrics_available else 'PARTIAL'} | Players={player_count}"
+        status_text = f"Metrics {'OK' if metrics_available else 'PARTIAL'} | Players={player_count}"
         if payload.get("error"):
             status_text = f"Metrics ERROR | {payload.get('error')}"
 
@@ -1898,7 +2008,6 @@ class FootballSimulator:
                     f"Confidence: {confidence}"
                 )
             )
-
         self.live_metrics_box.delete("1.0", "end")
 
         if payload.get("error"):
@@ -1908,8 +2017,8 @@ class FootballSimulator:
         team_summary = payload.get("team_summary", {}) or {}
         leaders = payload.get("leaders", {}) or {}
         alerts = payload.get("alerts", []) or []
-
         top_alert = alerts[0] if alerts else "No movement alerts."
+
         self.live_metrics_box.insert("end", f"Match ID: {payload.get('match_id', self.tracking_match_id)}\n")
         self.live_metrics_box.insert("end", f"Top alert: {top_alert}\n\n")
 
@@ -1975,11 +2084,14 @@ class FootballSimulator:
             "padx": 10,
             "pady": 8,
         }
-
         self.btn_live_tactical_refresh = tk.Button(
             bottom, text="Refresh Tactical", command=self.refresh_live_tactical_panel, **btn_cfg
         )
         self.btn_live_tactical_refresh.pack(side="left", padx=(0, 6))
+
+        tk.Button(
+            bottom, text="Open Workbench", command=self.open_calibration_workbench, **btn_cfg
+        ).pack(side="left", padx=6)
 
     def fetch_live_tactical_api(self, match_id: str):
         url = f"{self.tracking_http_base_url}/live/tactical/{match_id}"
@@ -1990,10 +2102,20 @@ class FootballSimulator:
             return {"error": str(exc), "match_id": match_id}
 
     def refresh_live_tactical_api(self, force: bool = False):
+        if hasattr(self, "live_tactical_status_label"):
+            self.live_tactical_status_label.config(
+                text="Tactical API refreshing...",
+                fg=self._status_color("refreshing"),
+            )
         if getattr(self, "_live_tactical_refresh_in_flight", False) and not force:
             return
         self._live_tactical_refresh_in_flight = True
 
+        if hasattr(self, "live_tactical_status_label"):
+            self.live_tactical_status_label.config(
+                text="Tactical API refreshing...",
+                fg=self._status_color("refreshing"),
+            )
         if hasattr(self, "live_tactical_status_label"):
             self.live_tactical_status_label.config(text="Tactical API refreshing...", fg=self._status_color("refreshing"))
 
@@ -2006,24 +2128,15 @@ class FootballSimulator:
             self._on_live_tactical_error,
         )
 
-    def _apply_live_tactical_payload(self, data: dict):
-        self._live_tactical_refresh_in_flight = False
-        self.live_tactical_last_payload = data or {}
-        self.live_tactical_last_status = "ok" if not self.live_tactical_last_payload.get("error") else f"error: {self.live_tactical_last_payload.get('error')}"
+    def _apply_live_tactical_payload(self, payload):
+        self.live_tactical_last_payload = payload or {}
+        if self.live_tactical_last_payload.get("error"):
+            self.live_tactical_last_status = f"error: {self.live_tactical_last_payload.get('error')}"
+        else:
+            available = self.live_tactical_last_payload.get("tactical_available", False)
+            self.live_tactical_last_status = f"available={available}"
+
         self.last_tactical_refresh_at = self._now_clock_text()
-        self._render_live_tactical_panel()
-        self.render_match_intelligence()
-
-    def _on_live_tactical_error(self, error):
-        self._live_tactical_refresh_in_flight = False
-        self.live_tactical_last_payload = {"error": str(error)}
-        self.live_tactical_last_status = f"error: {error}"
-        self._render_live_tactical_panel()
-        self.render_match_intelligence()
-
-    def _render_live_tactical_panel(self):
-        if not hasattr(self, "live_tactical_status_label") or not hasattr(self, "live_tactical_box"):
-            return
 
         payload = self.live_tactical_last_payload or {}
         tactical_available = payload.get("tactical_available", False)
@@ -2031,14 +2144,15 @@ class FootballSimulator:
         pitch_ready = payload.get("pitch_map_ready", False)
         confidence = self._confidence_from_flags(tracking_ready, pitch_ready, False)
 
-        status_text = f"Tactical={'OK' if tactical_available else 'PARTIAL'}"
+        status_text = f"Tactical {'OK' if tactical_available else 'PARTIAL'}"
         if payload.get("error"):
             status_text = f"Tactical ERROR | {payload.get('error')}"
 
-        self.live_tactical_status_label.config(
-            text=status_text,
-            fg=self._status_color("error" if payload.get("error") else confidence),
-        )
+        if hasattr(self, "live_tactical_status_label"):
+            self.live_tactical_status_label.config(
+                text=status_text,
+                fg=self._status_color("error" if payload.get("error") else confidence),
+            )
 
         if hasattr(self, "live_tactical_meta_label"):
             self.live_tactical_meta_label.config(
@@ -2049,25 +2163,91 @@ class FootballSimulator:
                 )
             )
 
-        self.live_tactical_box.delete("1.0", "end")
-        if payload.get("error"):
-            self.live_tactical_box.insert("end", f"Tactical API Error:\n{payload['error']}\n")
-            return
+        if hasattr(self, "live_tactical_box"):
+            self.live_tactical_box.delete("1.0", "end")
 
-        home = payload.get("home", {}) or {}
-        away = payload.get("away", {}) or {}
-        alerts = payload.get("alerts", []) or []
+            if payload.get("error"):
+                self.live_tactical_box.insert("end", f"Tactical API Error:\n{payload['error']}\n")
+            else:
+                home = payload.get("home", {}) or {}
+                away = payload.get("away", {}) or {}
+                alerts = payload.get("alerts", []) or []
+                top_alert = alerts[0] if alerts else "No tactical alerts."
 
-        top_alert = alerts[0] if alerts else "No tactical alerts."
-        self.live_tactical_box.insert("end", f"Match ID: {payload.get('match_id', self.tracking_match_id)}\n")
-        self.live_tactical_box.insert("end", f"Top note: {top_alert}\n\n")
-        self.live_tactical_box.insert("end", "Formation Hints\n")
-        self.live_tactical_box.insert("end", f"- Home: {home.get('formation_hint', 'unknown')}\n")
-        self.live_tactical_box.insert("end", f"- Away: {away.get('formation_hint', 'unknown')}\n\n")
-        self.live_tactical_box.insert("end", "Shape Summary\n")
-        self.live_tactical_box.insert("end", f"- Home compactness: {home.get('compactness_score', 0)} | pressure: {home.get('pressure_score', 0)}\n")
-        self.live_tactical_box.insert("end", f"- Away compactness: {away.get('compactness_score', 0)} | pressure: {away.get('pressure_score', 0)}\n")
+                self.live_tactical_box.insert("end", f"Match ID: {payload.get('match_id', self.tracking_match_id)}\n")
+                self.live_tactical_box.insert("end", f"Top note: {top_alert}\n\n")
+                self.live_tactical_box.insert("end", "Formation Hints\n")
+                self.live_tactical_box.insert("end", f"- Home: {home.get('formation_hint', 'unknown')}\n")
+                self.live_tactical_box.insert("end", f"- Away: {away.get('formation_hint', 'unknown')}\n\n")
+                self.live_tactical_box.insert("end", "Shape Summary\n")
+                self.live_tactical_box.insert("end", f"- Home compactness: {home.get('compactness_score', 0)} | pressure: {home.get('pressure_score', 0)}\n")
+                self.live_tactical_box.insert("end", f"- Away compactness: {away.get('compactness_score', 0)} | pressure: {away.get('pressure_score', 0)}\n")
 
+        self.render_match_intelligence()
+
+    def _on_live_tactical_error(self, error):
+        self._live_tactical_refresh_in_flight = False
+        self.live_tactical_last_payload = {"error": str(error)}
+        self.live_tactical_last_status = f"error: {error}"
+        self._render_live_tactical_panel()
+        self.render_match_intelligence()
+
+
+    def build_match_intelligence_api_card(self, parent_override=None):
+        parent = parent_override or self.live_right
+        card = self.make_card(parent, "Match Intelligence")
+        card.pack(fill="both", expand=True, pady=(0, 0))
+
+        self.match_intelligence_status_label = tk.Label(
+            card,
+            text="Match Intelligence waiting...",
+            bg=self.card_bg,
+            fg="#fbbf24",
+            justify="left",
+            anchor="w",
+        )
+        self.match_intelligence_status_label.pack(fill="x", pady=(0, 4))
+
+        self.match_intelligence_meta_label = tk.Label(
+            card,
+            text="Last refresh: --:--:-- | Freshness: NO DATA | Confidence: LOW",
+            bg=self.card_bg,
+            fg=self.muted_fg,
+            justify="left",
+            anchor="w",
+        )
+        self.match_intelligence_meta_label.pack(fill="x", pady=(0, 8))
+
+        self.match_intelligence_box = tk.Text(card, height=14, wrap="word")
+        self.style_text_widget(self.match_intelligence_box)
+        self.match_intelligence_box.pack(fill="both", expand=True)
+
+        bottom = tk.Frame(card, bg=self.card_bg)
+        bottom.pack(fill="x", pady=(8, 0))
+
+        btn_cfg = {
+            "bg": self.accent,
+            "fg": "white",
+            "relief": "flat",
+            "activebackground": self.accent,
+            "activeforeground": "white",
+            "padx": 10,
+            "pady": 8,
+        }
+
+        tk.Button(
+            bottom,
+            text="Refresh Intelligence",
+            command=lambda: self.refresh_all_live_api_panels(force=True),
+            **btn_cfg,
+        ).pack(side="left", padx=(0, 6))
+
+        tk.Button(
+            bottom,
+            text="Export Snapshot",
+            command=self.export_live_dashboard_snapshot,
+            **btn_cfg,
+        ).pack(side="left", padx=6)
 
     def render_match_intelligence(self):
         if not hasattr(self, "match_intelligence_status_label") or not hasattr(self, "match_intelligence_box"):
@@ -2084,11 +2264,7 @@ class FootballSimulator:
         metrics_available = metrics.get("metrics_available", False)
         tactical_available = tactical.get("tactical_available", False)
 
-        confidence = self._confidence_from_flags(
-            tracking_ready=tracking_ready,
-            pitch_ready=pitch_ready,
-            calibration_ready=calibration_ready,
-        )
+        confidence = self._confidence_from_flags(tracking_ready, pitch_ready, calibration_ready)
 
         self.match_intelligence_status_label.config(
             text=f"Readiness={readiness}/100 | Confidence={confidence}",
@@ -2106,7 +2282,6 @@ class FootballSimulator:
 
         home = tactical.get("home", {}) or {}
         away = tactical.get("away", {}) or {}
-
         alerts = []
         alerts.extend(analysis.get("alerts", []) or [])
         alerts.extend(metrics.get("alerts", []) or [])
@@ -2153,11 +2328,46 @@ class FootballSimulator:
     def refresh_all_live_api_panels(self, force: bool = False):
         self.refresh_tracking_http_status(silent=True, force=force)
         self.refresh_tracking_analysis_panel()
-        self.refresh_live_metrics_status_label.config(text="Metrics API refreshing...", fg=self._status_color("refreshing")) if hasattr(self, "live_metrics_status_label") else None
-        self.refresh_live_tactical_panel()
+        self.refresh_live_metrics_panel()
         self.refresh_live_metrics_api(force=force)
+        self.refresh_live_tactical_panel()
         self.refresh_live_tactical_api(force=force)
         self.render_match_intelligence()
+
+    def export_live_dashboard_snapshot(self):
+        try:
+            self.snapshot_export_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            file_path = self.snapshot_export_dir / f"live_dashboard_snapshot_{self.tracking_match_id}_{timestamp}.json"
+
+            analysis_payload = getattr(self, "tracking_analysis_last_payload", {}) or {}
+            metrics_payload = getattr(self, "live_metrics_last_payload", {}) or {}
+            tactical_payload = getattr(self, "live_tactical_last_payload", {}) or {}
+
+            snapshot = {
+                "exported_at": self._now_clock_text(),
+                "match_id": self.tracking_match_id,
+                "tracking_http_status": getattr(self, "tracking_last_http_status", ""),
+                "tracking_socket_status": getattr(self, "tracking_last_status", ""),
+                "analysis": analysis_payload,
+                "metrics": metrics_payload,
+                "tactical": tactical_payload,
+                "match_intelligence": {
+                    "last_refresh": self.last_intelligence_refresh_at,
+                    "readiness_score": analysis_payload.get("readiness_score", 0),
+                    "tracking_ready": analysis_payload.get("tracking_ready", False),
+                    "pitch_map_ready": analysis_payload.get("pitch_map_ready", False),
+                    "calibration_ready": analysis_payload.get("calibration_ready", False),
+                    "metrics_available": metrics_payload.get("metrics_available", False),
+                    "tactical_available": tactical_payload.get("tactical_available", False),
+                },
+            }
+
+            file_path.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
+            self.add_commentary(f"Snapshot exported: {file_path}")
+            messagebox.showinfo("Export Snapshot", f"Saved snapshot to:\n{file_path}")
+        except Exception as exc:
+            messagebox.showerror("Export Snapshot", str(exc))
 
     def build_post_match_page(self):
         page = self.page_bodies["post_match"]
